@@ -18,7 +18,7 @@ impl Config {
     pub fn get_path() -> Result<PathBuf, AppError> {
         let appdata = std::env::var("APPDATA")
             .map_err(|_| AppError::Config("APPDATA env var not set".into()))?;
-        Ok(PathBuf::from(appdata).join("tnp").join("config.toml"))
+        Ok(PathBuf::from(appdata).join("pastahandler").join("config.toml"))
     }
 }
 

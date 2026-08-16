@@ -9,7 +9,6 @@ pub struct Hotkeys {
 }
 
 impl Hotkeys {
-    // Use a configured hotkey manager or a new one.
     pub fn new() -> Result<Self, AppError> {
         Ok(Self { hotkey_manager: GlobalHotKeyManager::new()? })
     }

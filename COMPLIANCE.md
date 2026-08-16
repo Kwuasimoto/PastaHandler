@@ -1,4 +1,4 @@
-# TwitchNamePaste (tnp) — Riot TOS Design-Compliance Memo
+# PastaHandler — Riot TOS Design-Compliance Memo
 
 **Date of clause verification:** 2026-08-16 (all quoted language fetched directly from riotgames.com on this date)
 
@@ -6,36 +6,36 @@
 
 ## 1. What this document is — and is not
 
-This is a **good-faith design-compliance memo**: it maps every architectural decision in tnp against the
+This is a **good-faith design-compliance memo**: it maps every architectural decision in PastaHandler against the
 specific clauses of Riot Games' Terms of Service and Community Pact that govern third-party software.
 
 It is **not legal advice** (no lawyer wrote it), and it is **not a shield**. Riot's ToS §2.1.2 gives Riot
 discretion to suspend accounts where they "reasonably determine" a violation, and platform enforcement is
 not a court. What this memo *is* good for:
 
-1. **Design discipline** — every capability tnp has (and deliberately lacks) traces to a clause below.
+1. **Design discipline** — every capability PastaHandler has (and deliberately lacks) traces to a clause below.
 2. **Evidence of intent** — if an account is ever falsely flagged, this memo plus the greppable design
    receipts (§6) are ready-made material for a Riot Support appeal.
 
-## 2. What tnp is (the facts this memo relies on)
+## 2. What PastaHandler is (the facts this memo relies on)
 
-tnp is a Windows system-tray utility. The user assigns global hotkeys to short text snippets. When a
-hotkey is pressed, tnp writes that snippet to the **Windows clipboard**. Nothing else happens. The user
+PastaHandler is a Windows system-tray utility. The user assigns global hotkeys to short text snippets. When a
+hotkey is pressed, PastaHandler writes that snippet to the **Windows clipboard**. Nothing else happens. The user
 then pastes it themselves with a real, physical `Ctrl+V` keypress — in League chat or anywhere else.
 
-Everything tnp does happens at the OS level, outside any game:
+Everything PastaHandler does happens at the OS level, outside any game:
 
-| tnp does | tnp never does |
+| PastaHandler does | PastaHandler never does |
 |---|---|
 | Registers hotkey combos with Windows via `RegisterHotKey` | Installs keyboard hooks (`SetWindowsHookEx`) |
 | Receives `WM_HOTKEY` for its own registered combos only | Observes any other keystroke |
 | Writes text to the OS clipboard (`SetClipboardData` via `arboard`) | Sends synthetic input (`SendInput` / `keybd_event`) |
 | Shows a tray icon and a settings window | Opens a handle to any Riot process (`OpenProcess`) |
-| Reads/writes its own config file in `%APPDATA%\tnp\` | Reads or writes any process's memory (`ReadProcessMemory` / `WriteProcessMemory`) |
+| Reads/writes its own config file in `%APPDATA%\pastahandler\` | Reads or writes any process's memory (`ReadProcessMemory` / `WriteProcessMemory`) |
 | | Touches Riot files, windows, network traffic, or APIs |
 | | Loads any kernel driver |
 
-The paste itself is always the human's own keypress. tnp has **zero visibility into, and zero interaction
+The paste itself is always the human's own keypress. PastaHandler has **zero visibility into, and zero interaction
 with, the game.**
 
 ## 3. The governing clauses (verbatim, verified 2026-08-16)
@@ -92,28 +92,28 @@ Source: https://www.riotgames.com/en/community-pact
 
 ## 4. Clause-by-clause analysis
 
-### §7.1(11): the clause's own qualifier excludes tnp
+### §7.1(11): the clause's own qualifier excludes PastaHandler
 
 The prohibition is scoped by its own text: automation programs "**that interact with the Riot Services in
-any way**." tnp interacts with the Windows clipboard and the Windows hotkey registry. It does not
+any way**." PastaHandler interacts with the Windows clipboard and the Windows hotkey registry. It does not
 interact with the Riot Services in any way. Taking each sub-prong of §7.1(11) in turn:
 
-- *"intercept, emulate, or redirect any communication relating to the Riot Services"* — tnp opens no
+- *"intercept, emulate, or redirect any communication relating to the Riot Services"* — PastaHandler opens no
   network sockets, reads no traffic, and emulates nothing. It has no networking code at all.
-- *"collect info about the Riot Services by reading areas of memory used by the Riot Services"* — tnp
+- *"collect info about the Riot Services by reading areas of memory used by the Riot Services"* — PastaHandler
   never opens a handle to any process. There is no `OpenProcess`, no `ReadProcessMemory`, anywhere.
-- *"mods, hacks, cheats, scripts, bots, trainers"* — tnp modifies no game files, hooks no game code,
+- *"mods, hacks, cheats, scripts, bots, trainers"* — PastaHandler modifies no game files, hooks no game code,
   automates no gameplay, and grants no gameplay capability.
 
-The remaining word is "automation programs." tnp automates exactly one thing: **filling the user's own
+The remaining word is "automation programs." PastaHandler automates exactly one thing: **filling the user's own
 clipboard** — an OS feature, outside the game. The paste into chat remains a deliberate human keypress.
-Whether that final word could be stretched over tnp is the grey zone; the qualifier "that interact with
+Whether that final word could be stretched over PastaHandler is the grey zone; the qualifier "that interact with
 the Riot Services in any way" is the textual reason it should not be.
 
 ### Community Pact "Scripting": excluded by Riot's own definition
 
 Riot defines Scripting as software that takes "automated actions (ie: auto-aiming or auto-dodging) **or
-respond[s] to in-game events** on their behalf." tnp:
+respond[s] to in-game events** on their behalf." PastaHandler:
 
 - takes no in-game actions, automated or otherwise;
 - *cannot* respond to in-game events — it has no visibility into the game whatsoever;
@@ -124,11 +124,11 @@ respond[s] to in-game events** on their behalf." tnp:
 
 Pre-loading one's own text into one's own clipboard confers no gameplay advantage. For calibration:
 Riot *approves* companion apps that actively read game data and render overlays (Blitz.gg, Porofessor).
-tnp is strictly less invasive than software Riot has explicitly blessed — it reads nothing at all.
+PastaHandler is strictly less invasive than software Riot has explicitly blessed — it reads nothing at all.
 
 ### §7.1(9): the honest residual risk — and it attaches to usage, not to the software
 
-"Spamming chat … with repeated postings" is the one clause tnp's *use* can genuinely violate. Pasting
+"Spamming chat … with repeated postings" is the one clause PastaHandler's *use* can genuinely violate. Pasting
 the same Twitch link into chat game after game is exactly "repeated postings … for personal or
 commercial purposes." Key points:
 
@@ -151,11 +151,11 @@ retrospective plus community analysis) ranks operations roughly least → most l
 5. Synthetic input into the game (`SendInput` etc.) — *documented enforcement target (macros/autoclickers)*
 6. Reading/writing game memory — *the core thing Vanguard exists to catch*
 
-tnp lives entirely at ranks 1–2 **by design**, including deliberately choosing `RegisterHotKey` over the
+PastaHandler lives entirely at ranks 1–2 **by design**, including deliberately choosing `RegisterHotKey` over the
 broader hook API even though the hook would have been easier to code against. Riot's Vanguard x LoL
 retrospective states false-positive bans run below 0.01% (fewer than 1 in 10,000 bans) with innocent
 accounts restored in under 72 hours on average, and that benign apps which trip Vanguard's protections
-get *blocked from functioning*, not banned. tnp performs none of the operations (handle-opening,
+get *blocked from functioning*, not banned. PastaHandler performs none of the operations (handle-opening,
 hooking into the client) that even the blocked category exhibits.
 
 Source: https://www.leagueoflegends.com/en-us/news/dev/dev-vanguard-x-lol-retrospective/
@@ -183,13 +183,13 @@ Dependency receipts (`Cargo.toml` / `Cargo.lock`):
    in March 2025 they banned even *read-only* enemy-ult-timer overlays. A future policy could sweep
    more broadly. Re-check the live ToS periodically.
 3. **False flags:** rare and short-lived per Riot's own numbers, but nonzero. That is what §8 is for.
-4. **The spam clause is real:** the most likely bad outcome for a tnp user is a chat restriction earned
+4. **The spam clause is real:** the most likely bad outcome for a PastaHandler user is a chat restriction earned
    through overuse — self-inflicted, and outside the software's control.
 
 ## 8. If an account is ever flagged (appeal playbook)
 
 1. File a ticket at https://support.riotgames.com — category: account suspension appeal.
-2. State what tnp is in one sentence: *a clipboard utility that writes user-authored text to the Windows
+2. State what PastaHandler is in one sentence: *a clipboard utility that writes user-authored text to the Windows
    clipboard on a hotkey; it never interacts with the game process, sends no input, and reads no memory.*
 3. Attach or link: this memo, the source repository, and the §6 grep receipt.
 4. Note the design choices made specifically to stay compliant: `RegisterHotKey` (not hooks), no

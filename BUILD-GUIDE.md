@@ -1,4 +1,4 @@
-# TwitchNamePaste (tnp) — Hand-Coding Build Guide
+# PastaHandler — Hand-Coding Build Guide
 
 **You write every line.** This guide gives you module layout, type signatures, API names, and short
 snippets *only* where the shape is genuinely unguessable after a year away. It never hands you a full
@@ -11,12 +11,12 @@ input-simulation crates, no auto-paste. Ever.
 
 ## Performance posture (why the app is shaped the way it is)
 
-tnp is two processes sharing one `.exe`:
+PastaHandler is two processes sharing one `.exe`:
 
-- **Resident process** (`tnp.exe`) — hotkeys + tray + clipboard on a bare `tao` event loop. **No
+- **Resident process** (`pastahandler.exe`) — hotkeys + tray + clipboard on a bare `tao` event loop. **No
   window, no GPU context, ever.** Idles at ~1 wake/second, single-digit MB of RAM. This is the only
   thing running while a game runs, and it is deliberately indistinguishable from nothing.
-- **Settings process** (`tnp.exe --settings`) — a plain `eframe`/egui window in its own short-lived
+- **Settings process** (`pastahandler.exe --settings`) — a plain `eframe`/egui window in its own short-lived
   process. Opens when you ask, edits `config.toml`, exits fully on close — its GPU context dies with
   it. The resident process notices the config file changed and re-registers hotkeys.
 
@@ -126,17 +126,17 @@ cargo new linkcheck && cd linkcheck && cargo run
 ### 0.4 Console hello world — crate anatomy (~10 min)
 
 You built one in 0.2; now actually look at it. You're already *in* the project directory
-(`twitchnamepaste`, alongside the two docs), so initialize the crate **in place** — don't `cargo new`
+(alongside the two docs), so initialize the crate **in place** — don't `cargo new`
 (that would nest a folder):
 
 ```bash
-cargo init --name tnp
+cargo init --name pastahandler
 ```
 
 - `init` sets up the current directory as the crate; existing files (COMPLIANCE.md, BUILD-GUIDE.md)
   are untouched.
-- `--name tnp` overrides the folder-derived package name so the exe comes out as `tnp.exe`, not
-  `twitchnamepaste.exe`.
+- `--name pastahandler` sets the package name explicitly (instead of deriving it from whatever the
+  folder happens to be called), so the exe comes out as `pastahandler.exe`.
 - It also `git init`s the folder if it isn't a repo (it isn't). Feature, not accident — commit at
   every checkpoint.
 
@@ -175,7 +175,7 @@ struct HelloApp { clicks: u32 }
 impl eframe::App for HelloApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Hello, tnp");
+            ui.heading("Hello, PastaHandler");
             if ui.button("Click me").clicked() { self.clicks += 1; }
             ui.label(format!("Clicks: {}", self.clicks));
         });
@@ -222,7 +222,7 @@ rustflags = ["-C", "target-feature=+crt-static"]
 cargo build --release
 ```
 
-   → `target/release/tnp.exe`. Double-click it in Explorer. Copy it alone to `C:\temp\` and run it
+   → `target/release/pastahandler.exe`. Double-click it in Explorer. Copy it alone to `C:\temp\` and run it
    from there — it must work with nothing beside it.
 
 ### 0.7 Mini-installer with Inno Setup (~1–2 h)
@@ -233,24 +233,24 @@ cargo build --release
 
 ```iss
 [Setup]
-AppName=TnpHello
+AppName=PastaHello
 AppVersion=0.0.1
-DefaultDirName={autopf}\TnpHello
-OutputBaseFilename=tnp-hello-setup
+DefaultDirName={autopf}\PastaHello
+OutputBaseFilename=pastahandler-hello-setup
 Compression=lzma2
 SolidCompression=yes
 
 [Files]
-Source: "..\target\release\tnp.exe"; DestDir: "{app}"
+Source: "..\target\release\pastahandler.exe"; DestDir: "{app}"
 
 [Icons]
-Name: "{autoprograms}\TnpHello"; Filename: "{app}\tnp.exe"
+Name: "{autoprograms}\PastaHello"; Filename: "{app}\pastahandler.exe"
 
 [Run]
-Filename: "{app}\tnp.exe"; Description: "Launch now"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\pastahandler.exe"; Description: "Launch now"; Flags: nowait postinstall skipifsilent
 ```
 
-3. Run the produced `tnp-hello-setup.exe`: installs to Program Files, Start-menu entry appears,
+3. Run the produced `pastahandler-hello-setup.exe`: installs to Program Files, Start-menu entry appears,
    app launches from it. Then Settings → Apps → uninstall — confirm it removes cleanly.
 4. **SmartScreen honesty:** your locally built installer will NOT trigger SmartScreen — the warning
    is driven by Mark-of-the-Web, which only downloaded files carry. To see what real users see,
@@ -330,7 +330,7 @@ Clipboard write is two lines with `arboard`: `Clipboard::new()`, `.set_text(...)
 
 `cargo run`, press `Ctrl+Alt+1`, `Ctrl+V` into Notepad → your string appears. Quit the app,
 `Ctrl+V` again → **still pastes** (Windows owns clipboard data after `SetClipboardData` — this is
-why tnp needs no daemon).
+why PastaHandler needs no daemon).
 
 **Re-learned:** ownership/lifetime of a manager object, `move` closures, channels (`try_recv`),
 first `Result`s.
@@ -339,7 +339,7 @@ first `Result`s.
 
 ## Segment 2 — Config: multiple snippets, real error handling
 
-**Goal:** snippets in `%APPDATA%\tnp\config.toml`; all hotkeys registered at startup; every fallible
+**Goal:** snippets in `%APPDATA%\pastahandler\config.toml`; all hotkeys registered at startup; every fallible
 operation returns a typed `Result`. The module layout and error convention you set here carry to the
 end.
 
@@ -395,7 +395,7 @@ pub struct Snippet {
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq)]
 pub struct Config { pub snippets: Vec<Snippet> }
 
-pub fn config_path() -> Result<std::path::PathBuf>;         // %APPDATA%\tnp\config.toml
+pub fn config_path() -> Result<std::path::PathBuf>;         // %APPDATA%\pastahandler\config.toml
 pub fn load_from(path: &Path) -> Result<Config>;            // missing file => Ok(default)
 pub fn save_to(path: &Path, config: &Config) -> Result<()>; // create_dir_all first
 ```
@@ -432,7 +432,7 @@ string, syntax error) → readable error naming the problem, not a panic.
 
 ## Segment 3 — Tray: the app disappears
 
-**Goal:** no console; tnp lives in the tray with **Open Settings** (spawns the settings process —
+**Goal:** no console; PastaHandler lives in the tray with **Open Settings** (spawns the settings process —
 stub UI for now) and **Quit**.
 
 ### Steps
@@ -470,7 +470,7 @@ menu.append_items(&[&open_item, &quit_item]).unwrap();
 
 let _tray = TrayIconBuilder::new()
     .with_menu(Box::new(menu))
-    .with_tooltip("TwitchNamePaste")
+    .with_tooltip("PastaHandler")
     .with_icon(icon)
     .build().unwrap();
 ```
@@ -543,15 +543,15 @@ the simplest coordination mechanism (a file + mtime) is usually enough.
 
 **Goal:** the real installer. Short segment — you learned Inno in 0.7; this is adaptation.
 
-1. Copy `installer/hello.iss` → `installer/tnp.iss`; update names/version; add the optional
+1. Copy `installer/hello.iss` → `installer/pastahandler.iss`; update names/version; add the optional
    start-with-Windows task:
 
 ```iss
 [Tasks]
-Name: "startup"; Description: "Start TwitchNamePaste when Windows starts"; Flags: unchecked
+Name: "startup"; Description: "Start PastaHandler when Windows starts"; Flags: unchecked
 
 [Icons]
-Name: "{userstartup}\TwitchNamePaste"; Filename: "{app}\tnp.exe"; Tasks: startup
+Name: "{userstartup}\PastaHandler"; Filename: "{app}\pastahandler.exe"; Tasks: startup
 ```
 
 2. Write the user-facing `README.md`. It MUST contain:
@@ -583,7 +583,7 @@ click-through → install → tray icon → add snippet → hotkey → paste →
 chat (post-game lobby is a friendlier first test than mid-match).
 
 **Performance receipts** (the posture, verified):
-- Task Manager → Details → add the GPU column: resident `tnp.exe` shows **0% GPU / no GPU memory**,
+- Task Manager → Details → add the GPU column: resident `pastahandler.exe` shows **0% GPU / no GPU memory**,
   including while a game runs.
 - Idle CPU ≈ 0.0%; RAM single-digit MB.
 - Settings process appears on Open Settings and is *gone* from Task Manager after close.

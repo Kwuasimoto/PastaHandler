@@ -24,9 +24,11 @@ fn main() -> Result<(), AppError> {
         *control_flow = ControlFlow::Poll;
 
         if let Ok(key_event) = hotkey_rx.try_recv() {
-            if let Some(&idx) = map.get(&key_event.id) {
-                if let Err(e) = clipboard_manager.set_clipboard_text(&config.snippets[idx].text) {
-                    eprintln!("{e}");
+            if key_event.state == HotKeyState::Pressed {
+                if let Some(&idx) = map.get(&key_event.id) {
+                    if let Err(e) = clipboard_manager.set_clipboard_text(&config.snippets[idx].text) {
+                        eprintln!("{e}");
+                    }
                 }
             }
         }
