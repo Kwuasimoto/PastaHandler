@@ -1,0 +1,13 @@
+[package]
+name = "tnp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+global-hotkey = "0.8"   # Win32 RegisterHotKey — narrow; OS delivers only YOUR combos
+tray-icon     = "0.24"  # tray + menu (muda); sibling crate of global-hotkey
+arboard       = "3.6"   # clipboard; on Windows, contents outlive your process
+tao           = "0.36"  # the resident process's Win32 event loop
+eframe        = "0.36"  # settings process ONLY
+serde         = { version = "1", features = ["derive"] }
+toml          = "1.1"
