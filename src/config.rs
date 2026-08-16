@@ -15,10 +15,25 @@ pub struct Snippet {
 }
 
 impl Config {
+    pub fn init() -> Result<Config, AppError> {
+        println!("Initializing configuration file");
+        let sample = Config {
+            snippets: vec![Snippet {
+                label: "Starter Snippet".into(),
+                text: "https://github.com/Kwuasimoto/PastaHandler".into(),
+                hotkey: "ctrl+alt+Digit1".into()
+            }]
+        };
+        return Ok(sample);
+    }
+
     pub fn get_path() -> Result<PathBuf, AppError> {
         let appdata = std::env::var("APPDATA")
             .map_err(|_| AppError::Config("APPDATA env var not set".into()))?;
-        Ok(PathBuf::from(appdata).join("pastahandler").join("config.toml"))
+        let path = PathBuf::from(appdata).join("pastahandler").join("config.toml");
+        let path_str = path.to_str().unwrap();
+        println!("Path: {path_str}");
+        Ok(path)
     }
 }
 
@@ -30,7 +45,11 @@ impl ConfigFile {
     pub fn read(&self) -> Result<Config, AppError> {
         match std::fs::read_to_string(&self.path) {
             Ok(text) => Ok(toml::from_str(&text)?),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let new_config = Config::init()?;
+                self.write(&new_config)?;
+                Ok(new_config)
+            },
             Err(e) => Err(e.into())
         }
     }
