@@ -13,6 +13,56 @@ pub struct Config {
     pub snippets: Vec<Snippet>,
     #[serde(default)]
     pub open_settings_on_launch: bool,
+    #[serde(default)]
+    pub theme: Theme,
+}
+
+/// Curated theme; the settings UI derives every remaining shade from these so
+/// any combination stays cohesive. serde(default) on the container: configs
+/// saved before a field existed fall back to that field's default.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct Theme {
+    pub accent: [u8; 3],
+    pub background: [u8; 3],
+    pub text: [u8; 3],
+    /// Resting border around inputs/buttons (hover/active borders derive from accent).
+    pub border: [u8; 3],
+    /// The sliding square inside the on/off toggles.
+    pub knob: [u8; 3],
+    pub corner_radius: u8,
+    /// Remove the OS window border; the app draws its own title bar.
+    pub borderless: bool,
+}
+
+impl Default for Theme {
+    fn default() -> Self {
+        Self {
+            accent: [242, 183, 53],
+            background: [27, 27, 27],
+            text: [222, 222, 222],
+            border: [58, 58, 58],
+            knob: [235, 235, 235],
+            corner_radius: 4,
+            borderless: false,
+        }
+    }
+}
+
+impl Theme {
+    /// Sakura preset — grounded in traditional Japanese blossom colors:
+    /// a warm petal background (sakura-iro lineage), deep plum text, rose accent.
+    pub fn sakura() -> Self {
+        Self {
+            accent: [178, 88, 118],      // deep blossom rose
+            background: [251, 236, 232], // warm petal wash
+            text: [86, 33, 53],          // plum (traditional pairing)
+            border: [228, 180, 190],     // soft petal edge
+            knob: [255, 249, 247],       // warm white
+            corner_radius: 5,            // petal-soft
+            borderless: false,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -41,6 +91,7 @@ impl Config {
         println!("Initializing configuration file");
         Config {
             open_settings_on_launch: true,
+            theme: Theme::default(),
             snippets: vec![Snippet {
                 text: "https://github.com/Kwuasimoto/PastaHandler".into(),
                 hotkey: "ctrl+alt+Digit1".into(),
@@ -109,6 +160,7 @@ mod tests {
         let file = temp_config("pastahandler-test-roundtrip.toml");
         let original = Config {
             open_settings_on_launch: true,
+            theme: Theme::default(),
             snippets: vec![Snippet {
                 text: "T".into(),
                 hotkey: "ctrl+alt+Digit1".into(),
