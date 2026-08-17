@@ -42,6 +42,26 @@ pub fn scale(c: [u8; 3], f: f32) -> egui::Color32 {
     egui::Color32::from_rgb(s(c[0]), s(c[1]), s(c[2]))
 }
 
+/// Per-frame owned colors shared by regions — computed AFTER the theme window
+/// each frame, so theme edits recolor the same frame. Owned `Color32`s (never
+/// references into the theme) are what keep region borrows disjoint.
+pub struct Palette {
+    pub accent: egui::Color32,
+    pub knob: egui::Color32,
+    /// Inactive-row text, ghost icons, and the resting resize grip.
+    pub dim: egui::Color32,
+}
+
+impl Palette {
+    pub fn from_theme(theme: &Theme) -> Self {
+        Self {
+            accent: rgb(theme.accent),
+            knob: rgb(theme.knob),
+            dim: scale(theme.text, 0.52),
+        }
+    }
+}
+
 /// The mascot adapts to the theme: dark ink on light backgrounds, light ink
 /// on dark. Computed BEFORE the theme window each frame (a background edit
 /// updates the mascot next frame — that is the intended behavior).

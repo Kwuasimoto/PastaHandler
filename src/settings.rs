@@ -5,9 +5,13 @@ use crate::{
     error::AppError,
 };
 
+mod chrome;
 mod style;
+mod widgets;
 
-use style::{apply_style, install_fonts, mascot_for, on_color, rgb, scale};
+use chrome::{caption_button, CaptionIcon};
+use style::{apply_style, install_fonts, mascot_for, on_color, rgb, Palette};
+use widgets::toggle_switch;
 
 pub fn run(config_file: ConfigFile) -> Result<(), AppError> {
     launch_gui(config_file)
@@ -27,88 +31,6 @@ struct SettingsApp {
     /// Debug builds only: F12 toggles egui's live style editor.
     #[cfg(debug_assertions)]
     style_editor: bool,
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum CaptionIcon {
-    Minimize,
-    Maximize,
-    Restore,
-    Close,
-}
-
-/// A title-bar caption button: painter-drawn icon (no font-glyph gambling),
-/// backplate on hover — the close button's backplate is the Windows-convention red.
-fn caption_button(ui: &mut egui::Ui, icon: CaptionIcon, danger: bool) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(34.0, 24.0), egui::Sense::click());
-    if ui.is_rect_visible(rect) {
-        let hovered = response.hovered();
-        if hovered {
-            let fill = if danger {
-                egui::Color32::from_rgb(232, 17, 35) // Windows close-red
-            } else {
-                ui.visuals().widgets.hovered.weak_bg_fill
-            };
-            ui.painter()
-                .rect_filled(rect, ui.visuals().widgets.hovered.corner_radius, fill);
-        }
-        let color = if danger && hovered {
-            egui::Color32::WHITE
-        } else {
-            ui.visuals().text_color()
-        };
-        let stroke = egui::Stroke::new(1.4, color);
-        let c = rect.center();
-        let r = 4.5; // icon half-size
-        let p = ui.painter();
-        match icon {
-            CaptionIcon::Minimize => {
-                p.line_segment([egui::pos2(c.x - r, c.y), egui::pos2(c.x + r, c.y)], stroke);
-            }
-            CaptionIcon::Maximize => {
-                p.rect_stroke(
-                    egui::Rect::from_center_size(c, egui::vec2(2.0 * r, 2.0 * r)),
-                    egui::CornerRadius::same(2),
-                    stroke,
-                    egui::StrokeKind::Inside,
-                );
-            }
-            CaptionIcon::Restore => {
-                // two offset rounded squares — the classic "restore" pair
-                let small = 2.0 * r - 2.0;
-                p.rect_stroke(
-                    egui::Rect::from_min_size(
-                        egui::pos2(c.x - r + 2.0, c.y - r),
-                        egui::vec2(small, small),
-                    ),
-                    egui::CornerRadius::same(2),
-                    stroke,
-                    egui::StrokeKind::Inside,
-                );
-                p.rect_stroke(
-                    egui::Rect::from_min_size(
-                        egui::pos2(c.x - r, c.y - r + 2.0),
-                        egui::vec2(small, small),
-                    ),
-                    egui::CornerRadius::same(2),
-                    stroke,
-                    egui::StrokeKind::Inside,
-                );
-            }
-            CaptionIcon::Close => {
-                let d = r - 0.5;
-                p.line_segment(
-                    [egui::pos2(c.x - d, c.y - d), egui::pos2(c.x + d, c.y + d)],
-                    stroke,
-                );
-                p.line_segment(
-                    [egui::pos2(c.x - d, c.y + d), egui::pos2(c.x + d, c.y - d)],
-                    stroke,
-                );
-            }
-        }
-    }
-    response
 }
 
 /// Header theme button: a 2x2 grid of the CURRENT theme's colors — the control
@@ -147,65 +69,6 @@ fn theme_swatch_button(ui: &mut egui::Ui, theme: &Theme) -> egui::Response {
         }
     }
     response.on_hover_text("Theme")
-}
-
-/// A small animated on/off switch (egui ships no built-in). Gold when on;
-/// grayed and inert when `enabled` is false.
-fn toggle_switch(
-    ui: &mut egui::Ui,
-    on: &mut bool,
-    enabled: bool,
-    accent: egui::Color32,
-    knob_color: egui::Color32,
-) -> egui::Response {
-    // cell is wider than the track so it centers with breathing room, aligning
-    // with the padded look of the other columns
-    let cell = egui::vec2(40.0, 26.0);
-    let (rect, mut response) = ui.allocate_exact_size(cell, egui::Sense::click());
-    if response.clicked() && enabled {
-        *on = !*on;
-        response.mark_changed();
-    }
-    if ui.is_rect_visible(rect) {
-        let track = egui::Rect::from_center_size(rect.center(), egui::vec2(34.0, 18.0));
-        let t = ui.ctx().animate_bool(response.id, *on && enabled);
-        let lerp8 = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t) as u8;
-        let track_color = if enabled {
-            let off = ui.visuals().widgets.active.weak_bg_fill; // themed "off" shade
-            egui::Color32::from_rgb(
-                lerp8(off.r(), accent.r()),
-                lerp8(off.g(), accent.g()),
-                lerp8(off.b(), accent.b()),
-            )
-        } else {
-            ui.visuals().widgets.inactive.weak_bg_fill.linear_multiply(0.5)
-        };
-        // rectangular track, square sliding knob; radii follow the themed corner
-        // radius so the shape slider drives the toggle too (0 = square, 12 = pill)
-        let base = ui.visuals().widgets.inactive.corner_radius.nw;
-        ui.painter()
-            .rect_filled(track, egui::CornerRadius::same(base.min(9)), track_color);
-        let knob = 12.0;
-        let inset = 3.0;
-        let knob_x = egui::lerp(
-            (track.left() + inset + knob / 2.0)..=(track.right() - inset - knob / 2.0),
-            t,
-        );
-        let knob_color = if enabled {
-            knob_color
-        } else {
-            knob_color.linear_multiply(0.45)
-        };
-        ui.painter().rect_filled(
-            egui::Rect::from_center_size(
-                egui::pos2(knob_x, track.center().y),
-                egui::vec2(knob, knob),
-            ),
-            egui::CornerRadius::same((base / 2).min(6)),
-            knob_color,
-        );
-    }
-    response
 }
 
 /// Build a global-hotkey combo string from egui input. global-hotkey's parser
@@ -462,9 +325,8 @@ impl eframe::App for SettingsApp {
                 }
             }
 
-            let accent = rgb(self.draft.theme.accent);
-            let knob = rgb(self.draft.theme.knob);
-            let dim = scale(self.draft.theme.text, 0.52); // inactive-row text + ghost icons
+            // computed post-theme-window so edits recolor the table the same frame
+            let palette = Palette::from_theme(&self.draft.theme);
 
             // fixed columns + flexible Text column that absorbs the remaining width
             const SPACING: f32 = 10.0;
@@ -515,8 +377,13 @@ impl eframe::App for SettingsApp {
                             snippet.active = false;
                         }
                         let was_active = snippet.active;
-                        let toggle =
-                            toggle_switch(ui, &mut snippet.active, can_activate, accent, knob);
+                        let toggle = toggle_switch(
+                            ui,
+                            &mut snippet.active,
+                            can_activate,
+                            palette.accent,
+                            palette.knob,
+                        );
                         if !can_activate {
                             toggle.on_hover_text("Set a hotkey first");
                         } else if toggle.changed() {
@@ -532,7 +399,7 @@ impl eframe::App for SettingsApp {
                             .hint_text("Text to paste")
                             .vertical_align(egui::Align::Center);
                         if !snippet.active {
-                            text_edit = text_edit.text_color(dim);
+                            text_edit = text_edit.text_color(palette.dim);
                         }
                         let r_text = ui.add_sized([text_w, 26.0], text_edit);
                         // Hotkey cell: a button that captures the next key combo when armed.
@@ -540,7 +407,9 @@ impl eframe::App for SettingsApp {
                             let resp = ui.add_sized(
                                 [HOTKEY_W, 26.0],
                                 egui::Button::new(
-                                    egui::RichText::new("press keys…").italics().color(accent),
+                                    egui::RichText::new("press keys…")
+                                        .italics()
+                                        .color(palette.accent),
                                 ),
                             );
                             let events = ui.input(|inp| inp.events.clone());
@@ -584,7 +453,7 @@ impl eframe::App for SettingsApp {
                             } else if snippet.active {
                                 egui::RichText::new(&snippet.hotkey)
                             } else {
-                                egui::RichText::new(&snippet.hotkey).color(dim)
+                                egui::RichText::new(&snippet.hotkey).color(palette.dim)
                             };
                             if ui
                                 .add_sized([HOTKEY_W, 26.0], egui::Button::new(label))
@@ -601,7 +470,7 @@ impl eframe::App for SettingsApp {
                         let trash_tint = if self.hovered_delete == Some(i) {
                             egui::Color32::from_rgb(224, 82, 82)
                         } else {
-                            dim
+                            palette.dim
                         };
                         // white source asset × tint = exact color
                         let trash = egui::Image::new(egui::include_image!("../assets/trash.svg"))
@@ -674,33 +543,8 @@ impl eframe::App for SettingsApp {
                 );
             });
 
-            // borderless windows lose the OS resize edges — provide the classic
-            // corner grip in their place
             if self.draft.theme.borderless {
-                let screen = ui.ctx().content_rect(); // egui 0.36: was screen_rect
-                let grip = 20.0;
-                let grip_rect =
-                    egui::Rect::from_min_max(screen.max - egui::vec2(grip, grip), screen.max);
-                let resp = ui
-                    .interact(grip_rect, egui::Id::new("resize-grip-se"), egui::Sense::drag())
-                    .on_hover_cursor(egui::CursorIcon::ResizeNwSe)
-                    .on_hover_text("Drag to resize the window");
-                if resp.drag_started_by(egui::PointerButton::Primary) {
-                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::BeginResize(
-                        egui::ResizeDirection::SouthEast,
-                    ));
-                }
-                let grip_color = if resp.hovered() { accent } else { dim };
-                for i in 0..3 {
-                    let off = 8.0 + i as f32 * 4.0;
-                    ui.painter().line_segment(
-                        [
-                            egui::pos2(screen.max.x - off, screen.max.y - 6.0),
-                            egui::pos2(screen.max.x - 6.0, screen.max.y - off),
-                        ],
-                        egui::Stroke::new(1.5, grip_color),
-                    );
-                }
+                chrome::resize_grip(ui, &palette);
             }
         });
     }
