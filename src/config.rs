@@ -17,9 +17,16 @@ pub struct Config {
 
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Snippet {
-    pub label: String,
     pub text: String,
-    pub hotkey: String
+    pub hotkey: String,
+    /// Only active snippets register their hotkey. Defaults true so configs
+    /// from before this field existed keep working after upgrade.
+    #[serde(default = "default_active")]
+    pub active: bool,
+}
+
+fn default_active() -> bool {
+    true
 }
 
 const HEADER: &str = "\
@@ -35,9 +42,9 @@ impl Config {
         Config {
             open_settings_on_launch: true,
             snippets: vec![Snippet {
-                label: "Starter Snippet".into(),
                 text: "https://github.com/Kwuasimoto/PastaHandler".into(),
-                hotkey: "ctrl+alt+Digit1".into()
+                hotkey: "ctrl+alt+Digit1".into(),
+                active: true,
             }]
         }
     }
@@ -50,7 +57,6 @@ impl Config {
         Ok(path)
     }
 }
-
 impl ConfigFile {
     pub fn new(path: PathBuf) -> Self {
         Self { path, header: HEADER.into() }
@@ -104,9 +110,9 @@ mod tests {
         let original = Config {
             open_settings_on_launch: true,
             snippets: vec![Snippet {
-                label: "L".into(),
                 text: "T".into(),
                 hotkey: "ctrl+alt+Digit1".into(),
+                active: true,
             }],
         };
         file.write(&original).expect("write");

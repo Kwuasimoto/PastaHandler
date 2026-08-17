@@ -42,18 +42,31 @@ impl Hotkeys {
     }
 }
 
-/// Shared validation: parse + duplicate-check every hotkey in the config.
-/// No side effects — the settings UI calls this on drafts, and it is pass 1
-/// of `register_all`.
+/// Shared validation + registration-set builder. No side effects — the settings
+/// UI calls this on drafts, and it is pass 1 of `register_all`. Rules:
+/// - empty hotkey = an unbound snippet: always fine, never registered
+/// - non-empty hotkeys must parse, active or not (garbage never reaches disk)
+/// - duplicates are only rejected among ACTIVE snippets (inactive ones may
+///   deliberately share a combo — alternate texts you toggle between)
+/// - the returned set is what actually registers: active snippets with valid keys
 pub fn parse_all(config: &Config) -> Result<Vec<(HotKey, usize)>, AppError> {
     let mut parsed = Vec::new();
     let mut seen = HashSet::new();
     for (i, snippet) in config.snippets.iter().enumerate() {
+        if snippet.hotkey.trim().is_empty() {
+            continue; // unbound
+        }
         let hotkey: HotKey = snippet.hotkey.parse().map_err(|_| {
-            AppError::Config(format!("bad hotkey '{}' on '{}'", snippet.hotkey, snippet.label))
+            AppError::Config(format!("bad hotkey '{}' on snippet {}", snippet.hotkey, i + 1))
         })?;
+        if !snippet.active {
+            continue; // parked: validated but not registered, exempt from dup check
+        }
         if !seen.insert(hotkey.id()) {
-            return Err(AppError::Config(format!("duplicate hotkey '{}'", snippet.hotkey)));
+            return Err(AppError::Config(format!(
+                "duplicate active hotkey '{}'",
+                snippet.hotkey
+            )));
         }
         parsed.push((hotkey, i));
     }
@@ -71,9 +84,9 @@ mod tests {
                 .iter()
                 .enumerate()
                 .map(|(i, hk)| Snippet {
-                    label: format!("s{i}"),
                     text: format!("text{i}"),
                     hotkey: (*hk).into(),
+                    active: true,
                 })
                 .collect(),
             ..Default::default()
@@ -94,7 +107,7 @@ mod tests {
         let err = parse_all(&config).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("ctrl+alt+Banana"), "error names the combo: {msg}");
-        assert!(msg.contains("s0"), "error names the snippet: {msg}");
+        assert!(msg.contains("snippet 1"), "error names the row: {msg}");
     }
 
     #[test]
@@ -102,5 +115,34 @@ mod tests {
         let config = config_with(&["ctrl+alt+Digit1", "CTRL+ALT+Digit1"]); // case-insensitive dup
         let err = parse_all(&config).unwrap_err();
         assert!(err.to_string().contains("duplicate"), "{err}");
+    }
+
+    #[test]
+    fn empty_hotkeys_are_unbound_not_errors() {
+        let config = config_with(&["", "ctrl+alt+Digit1", "   "]);
+        let parsed = parse_all(&config).expect("empties must be skipped, not rejected");
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].1, 1); // original index preserved
+    }
+
+    #[test]
+    fn inactive_snippets_validate_but_do_not_register() {
+        let mut config = config_with(&["ctrl+alt+Digit1", "ctrl+alt+Digit2"]);
+        config.snippets[1].active = false;
+        let parsed = parse_all(&config).expect("inactive valid snippet is fine");
+        assert_eq!(parsed.len(), 1);
+
+        // garbage on an INACTIVE snippet still errors — never reaches disk
+        config.snippets[1].hotkey = "ctrl+alt+Banana".into();
+        assert!(parse_all(&config).is_err());
+    }
+
+    #[test]
+    fn inactive_duplicate_of_active_combo_is_allowed() {
+        let mut config = config_with(&["ctrl+alt+Digit1", "ctrl+alt+Digit1"]);
+        config.snippets[1].active = false;
+        let parsed = parse_all(&config).expect("parked twin of an active combo is legal");
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].1, 0);
     }
 }

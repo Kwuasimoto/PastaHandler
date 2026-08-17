@@ -1,2 +1,3 @@
 [target.x86_64-pc-windows-msvc]
+# Static CRT: the exe runs on clean machines without the VC++ redistributable
 rustflags = ["-C", "target-feature=+crt-static"]

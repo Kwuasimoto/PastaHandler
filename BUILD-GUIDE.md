@@ -307,12 +307,25 @@ if let Some(err) = &self.error {
 ### 4.4 Scope contract (unchanged, non-negotiable)
 
 One window, one screen: table + Add + inline error. No theming, no tray notifications, no
-import/export, no hotkey-recorder widget (a validated text field IS v1), no conflict wizard,
-no single-instance guard. All parked in v2.
+import/export, no conflict wizard, no single-instance guard. All parked in v2.
+
+**Scope amendment (shipped in v1 after all):** the hotkey cell is a capture button — click →
+"press keys…" → the combo records from real keystrokes (Esc cancels; bare unmodified keys are
+rejected so a global hotkey can't hijack normal typing). It turned out to need no key-mapping
+table: global-hotkey's parser accepts egui's friendly key names directly, verified by unit tests
+(`settings::tests`). The TOML stays hand-editable for power users.
 
 ---
 
 ## Segment 5 — Packaging · 1 evening
+
+> **Status (2026-08-17): installer infrastructure DONE and cycle-tested** — static CRT, farfalle
+> `.ico` embedded in the exe (build.rs + winresource), Inno script with per-user install (no UAC),
+> two Start-menu shortcuts (resident + Settings), optional run-at-startup task. Verified: silent
+> install → all artifacts present → silent uninstall → zero residue, config preserved.
+> Build it with: `iscc installer\pastahandler.iss` → `installer\Output\pastahandler-setup-0.1.0.exe`.
+> **Deferred to actual v1 release:** README with SmartScreen walkthrough, the download-it-back
+> Mark-of-the-Web test, GitHub release + tag. The numbered steps below remain as reference.
 
 1. `[profile.release] strip = true`; `.cargo/config.toml` with
    `rustflags = ["-C", "target-feature=+crt-static"]` (no VC++ redist dependency on clean machines).
@@ -390,7 +403,8 @@ grep -rnE "SendInput|keybd_event|SetWindowsHookEx|OpenProcess|ReadProcessMemory|
 
 ## v2 parking lot (write ideas here, don't build them)
 
-Code signing · exe `.ico` if skipped · hotkey-recorder widget · single-instance guards (resident
-named-mutex; settings window focus-instead-of-second) · `notify` crate over mtime polling ·
-import/export · log file next to config.toml (reload failures are invisible once the console is
-gone — first real v2 item) · `thiserror` migration · cross-platform · **never**: auto-paste.
+Code signing · exe `.ico` if skipped · friendlier validation messages · single-instance guards
+(resident named-mutex; settings window focus-instead-of-second) · `notify` crate over mtime
+polling · import/export · log file next to config.toml (reload failures are invisible once the
+console is gone — first real v2 item) · `thiserror` migration · cross-platform · **never**:
+auto-paste.
