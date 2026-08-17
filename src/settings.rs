@@ -7,10 +7,12 @@ use crate::{
 
 mod chrome;
 mod style;
+mod theme_window;
 mod widgets;
 
 use chrome::{caption_button, CaptionIcon};
 use style::{apply_style, install_fonts, mascot_for, on_color, rgb, Palette};
+use theme_window::ThemeWindow;
 use widgets::toggle_switch;
 
 pub fn run(config_file: ConfigFile) -> Result<(), AppError> {
@@ -23,8 +25,7 @@ struct SettingsApp {
     error: Option<String>,
     /// Row index currently listening for a hotkey combo, if any.
     capturing: Option<usize>,
-    /// Whether the Theme window is showing.
-    theme_open: bool,
+    theme_window: ThemeWindow,
     /// Row whose delete button was hovered last frame (drives its red tint —
     /// the tint must be chosen before this frame's hover state exists).
     hovered_delete: Option<usize>,
@@ -197,7 +198,7 @@ impl eframe::App for SettingsApp {
                         });
                     }
                     if theme_swatch_button(ui, &self.draft.theme).clicked() {
-                        self.theme_open = !self.theme_open;
+                        self.theme_window.open = !self.theme_window.open;
                     }
                 });
             });
@@ -212,118 +213,10 @@ impl eframe::App for SettingsApp {
             );
             ui.add_space(14.0);
 
-            if self.theme_open {
-                let ctx = ui.ctx().clone();
-                let mut open = self.theme_open;
-                let mut changed = false;
-                egui::Window::new("Theme")
-                    .open(&mut open)
-                    .resizable(false)
-                    .collapsible(false)
-                    .default_width(248.0)
-                    .vscroll(true) // short main window => theme sections scroll into reach
-                    .show(&ctx, |ui| {
-                        ui.spacing_mut().interact_size = egui::vec2(56.0, 24.0); // wider swatches
-                        ui.spacing_mut().slider_width = 130.0;
-
-                        ui.label(egui::RichText::new("PRESETS").small().weak());
-                        ui.add_space(2.0);
-                        ui.horizontal(|ui| {
-                            for (name, preset) in
-                                [("Default", Theme::default()), ("Sakura", Theme::sakura())]
-                            {
-                                if ui.button(name).clicked() {
-                                    // presets restyle; the window-border choice is yours to keep
-                                    let borderless = self.draft.theme.borderless;
-                                    self.draft.theme = preset;
-                                    self.draft.theme.borderless = borderless;
-                                    changed = true;
-                                }
-                            }
-                        });
-
-                        ui.add_space(8.0);
-                        ui.separator();
-                        ui.add_space(6.0);
-
-                        ui.label(egui::RichText::new("COLORS").small().weak());
-                        ui.add_space(2.0);
-                        egui::Grid::new("theme-colors")
-                            .num_columns(2)
-                            .min_col_width(104.0)
-                            .spacing([12.0, 8.0])
-                            .show(ui, |ui| {
-                                for (label, color) in [
-                                    ("Accent", &mut self.draft.theme.accent),
-                                    ("Background", &mut self.draft.theme.background),
-                                    ("Text", &mut self.draft.theme.text),
-                                    ("Border", &mut self.draft.theme.border),
-                                    ("Toggle knob", &mut self.draft.theme.knob),
-                                ] {
-                                    ui.label(label);
-                                    changed |= ui.color_edit_button_srgb(color).changed();
-                                    ui.end_row();
-                                }
-                            });
-
-                        ui.add_space(8.0);
-                        ui.separator();
-                        ui.add_space(6.0);
-
-                        ui.label(egui::RichText::new("SHAPE").small().weak());
-                        ui.add_space(2.0);
-                        egui::Grid::new("theme-shape")
-                            .num_columns(2)
-                            .min_col_width(104.0)
-                            .spacing([12.0, 8.0])
-                            .show(ui, |ui| {
-                                ui.label("Corner radius");
-                                changed |= ui
-                                    .add(egui::Slider::new(
-                                        &mut self.draft.theme.corner_radius,
-                                        0..=12,
-                                    ))
-                                    .changed();
-                                ui.end_row();
-                            });
-
-                        ui.add_space(8.0);
-                        ui.separator();
-                        ui.add_space(6.0);
-
-                        ui.label(egui::RichText::new("WINDOW").small().weak());
-                        ui.add_space(2.0);
-                        egui::Grid::new("theme-window")
-                            .num_columns(2)
-                            .min_col_width(104.0)
-                            .spacing([12.0, 8.0])
-                            .show(ui, |ui| {
-                                ui.label("Borderless");
-                                let acc = rgb(self.draft.theme.accent);
-                                let kn = rgb(self.draft.theme.knob);
-                                let resp = toggle_switch(
-                                    ui,
-                                    &mut self.draft.theme.borderless,
-                                    true,
-                                    acc,
-                                    kn,
-                                );
-                                if resp.changed() {
-                                    // applies live — no restart needed
-                                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Decorations(
-                                        !self.draft.theme.borderless,
-                                    ));
-                                    changed = true;
-                                }
-                                ui.end_row();
-                            });
-                    });
-                self.theme_open = open;
-                if changed {
-                    apply_style(&ctx, &self.draft.theme); // live restyle, same frame
-                    committed = true; // themes auto-save like everything else
-                }
-            }
+            // theme window renders BEFORE the palette is built, so edits recolor
+            // the table the same frame; themes auto-save like everything else
+            let ctx = ui.ctx().clone();
+            committed |= self.theme_window.show(&ctx, &mut self.draft.theme);
 
             // computed post-theme-window so edits recolor the table the same frame
             let palette = Palette::from_theme(&self.draft.theme);
@@ -572,7 +465,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
                 draft,
                 error: None,
                 capturing: None,
-                theme_open: false,
+                theme_window: ThemeWindow::new(),
                 hovered_delete: None,
                 #[cfg(debug_assertions)]
                 style_editor: false,
