@@ -1,603 +1,396 @@
-# PastaHandler — Hand-Coding Build Guide
+# PastaHandler — Build Guide
 
-**You write every line.** This guide gives you module layout, type signatures, API names, and short
-snippets *only* where the shape is genuinely unguessable after a year away. It never hands you a full
-implementation. Each segment ends in a checkpoint — **do not move on until the checkpoint passes**, and
-tackle exactly one segment at a time.
-
-**Companion doc:** [COMPLIANCE.md](COMPLIANCE.md). Its design rules are load-bearing: no
+**Shared keyboard:** the human writes the new/learning-heavy code; Claude takes refactors and
+mechanical chunks on explicit hand-off. Default remains human-first — the
+point is still relearning Rust. This guide has been reduced to the *remaining* work; completed
+segments live in git history now. Companion doc: [COMPLIANCE.md](COMPLIANCE.md) — its rules are load-bearing: no
 `SetWindowsHookEx`, no `SendInput`/`keybd_event`, no `OpenProcess`/`ReadProcessMemory`, no
 input-simulation crates, no auto-paste. Ever.
 
-## Performance posture (why the app is shaped the way it is)
+## Where the project stands (verified 2026-08)
 
-PastaHandler is two processes sharing one `.exe`:
+**Architecture (immovable): two processes, one exe.**
 
-- **Resident process** (`pastahandler.exe`) — hotkeys + tray + clipboard on a bare `tao` event loop. **No
-  window, no GPU context, ever.** Idles at ~1 wake/second, single-digit MB of RAM. This is the only
-  thing running while a game runs, and it is deliberately indistinguishable from nothing.
-- **Settings process** (`pastahandler.exe --settings`) — a plain `eframe`/egui window in its own short-lived
-  process. Opens when you ask, edits `config.toml`, exits fully on close — its GPU context dies with
-  it. The resident process notices the config file changed and re-registers hotkeys.
+- **Resident** (`pastahandler.exe`) — tao loop + hotkeys + tray + clipboard. No window, no GPU
+  context, 1 s `WaitUntil` heartbeat, ~0% idle CPU.
+- **Settings** (`pastahandler.exe --settings`) — currently opens Notepad; becomes the eframe UI in
+  the next segment. Edits the TOML; the resident notices the mtime change and re-registers live.
 
-Why not one process with a hidden settings window: a hidden eframe window keeps a Direct3D/wgpu
-context, swapchain, and font atlas resident in VRAM mid-game for zero benefit. Two processes cost
-nothing, keep the resident half GPU-free by construction, and — bonus — completely eliminate the
-"two event loops, one thread" integration problem. Both halves stay boring, simple code.
+**Module map (all compile clean, clippy silent):**
 
-## The stack (versions verified on crates.io, Aug 2026)
+| File | Owns |
+|---|---|
+| `main.rs` | dispatch only: `--settings` → `settings::run`, else `resident::run` |
+| `resident.rs` | the resident process: event loop, heartbeat reload, hotkey/menu handling |
+| `settings.rs` | `run(ConfigFile)` — Notepad stub, replaced by eframe next segment (same signature) |
+| `config.rs` | `ConfigFile` (read / atomic write / `mtime()`), `Config`, `Snippet`, sample seeding |
+| `hotkeys.rs` | `Hotkeys` with idempotent 3-pass `register_all` (validate → unregister → register) |
+| `clipboard.rs` | `ClipboardManager` with 3×/50 ms retry |
+| `tray.rs` | `Tray`: embedded farfalle icon (`assets/icon.png`, source `assets/icon.svg`), menu, ids |
+| `error.rs` | `AppError` + `From` impls + `Display`; `Result<T>` alias |
 
-```toml
-[dependencies]
-global-hotkey = "0.8"   # Win32 RegisterHotKey — narrow; OS delivers only YOUR combos
-tray-icon     = "0.24"  # tray + menu (muda); sibling crate of global-hotkey
-arboard       = "3.6"   # clipboard; on Windows, contents outlive your process
-tao           = "0.36"  # the resident process's Win32 event loop
-eframe        = "0.36"  # settings process ONLY
-serde         = { version = "1", features = ["derive"] }
-toml          = "1.1"
-```
+**Already proven by test:** startup rejects a bad config with a readable error (exit 1, no panic);
+a corrupt save *while running* logs `hotkey re-register failed: …` and keeps the old hotkeys live;
+a good save reloads silently without restart. Clipboard contents survive app exit.
 
-Why not Tauri: WebView2 + a JS frontend for a tray tool is a cathedral where the spec says shed. We
-use Tauri's *building blocks* (`global-hotkey`, `tray-icon`) directly. The `image` crate arrives in
-Segment 3 for the tray icon.
+**Status update (night shift, 2026-08-16):** Segment 4 is **implemented and machine-verified** —
+UI polish (sized fields, hints, subtitle), commit-and-write auto-save, shared validation via
+`hotkeys::parse_all` (unit-tested ×3), config round-trip tests (×2), clippy silent,
+`windows_subsystem` enabled, Notepad stub deleted. Auto-save proven end-to-end with synthetic
+input: typed into the real window, tabbed away, watched `label = "NightShift"` land in the TOML.
 
-**Ground rule:** when a snippet here doesn't compile, the crates' own `examples/` folders on GitHub
-and docs.rs front pages are the source of truth — these APIs move, this file doesn't.
-
-## Segment map
-
-| Segment | What you ship | Honest time |
-|---|---|---|
-| 0 | Environment + hello-world GUI installed via a real installer | 1 focused day (fine split over 2–3 evenings) |
-| 1 | Resident skeleton: hardcoded hotkey → clipboard | 1 evening |
-| 2 | Config file + real error handling | 1–2 evenings |
-| 3 | Tray icon; app becomes invisible | 1 evening |
-| 4 | Settings window (separate process) | 2–3 evenings |
-| 5 | Final packaging + README | 1 evening |
+- [x] `#![windows_subsystem = "windows"]` enabled (comment out for `println!` debugging).
+- [x] Checkpoint commit.
+- [ ] **The one human-required test:** hotkey → `Ctrl+V` pastes (machine can't press your keys in
+  good conscience); plus the full loop — tray → Open Settings → edit → paste reflects the edit
+  within a second → Quit. Then straight to Segment 5.
 
 ---
 
-## Segment 0 — Environment → hello-world GUI → installable .exe
+## Segment 4 — Settings UI (eframe) · 2–3 evenings
 
-**Goal:** prove the ENTIRE pipeline — toolchain → GUI window → release build → installer →
-install/uninstall — while the code is still trivial. Every scary unknown dies here, not in Segment 5.
+**Goal:** replace `settings::run`'s Notepad body with a small egui window: snippet table,
+add/edit/delete, validated hotkey field. **Decided UX: no Save button** — every *committed* edit
+writes the file; the resident picks it up within a second.
 
-### 0.1 Install rustup (~5 min)
+Because settings is its own process, this is a bog-standard eframe app — no event-loop integration,
+no hide-to-tray. Closing the window = process exits = GPU context released. That's the whole
+lifecycle.
 
-1. Go to https://rustup.rs → download `rustup-init.exe` → run it.
-2. It will show the default: `stable-x86_64-pc-windows-msvc`. That `msvc` suffix is what you want
-   (the GNU alternative exists; ignore it — MSVC is the native Windows target). Press Enter for the
-   default install.
-3. What you just installed, in one line each:
-   - `rustup` — toolchain manager (updates Rust, switches versions)
-   - `cargo` — build tool + package manager; the only command you'll actually type all day
-   - `rustc` — the compiler; cargo drives it, you almost never call it directly
-4. **Verify** in a NEW terminal (PATH changes need a fresh shell):
+> Each step below has a **spoiler** — a full reference implementation to type from (repetition
+> learning). Try the signatures first; open the spoiler when you want the answer key. Written
+> against eframe 0.36 — if a signature has drifted, the docs.rs/eframe front page wins.
 
-```bash
-cargo --version
-```
+### 4.0 Warm-up — the launch toggle (~20 min)
 
-   Expect something like `cargo 1.8x.0 (...)`. If "not recognized": open a new terminal first, then
-   check `%USERPROFILE%\.cargo\bin` is on PATH.
-5. Already had rustup from years ago? Just run:
+The config header comment is already in ✓. The remaining accepted feature: `open_settings_on_launch`.
 
-```bash
-rustup update
-```
-
-### 0.2 The MSVC linker — the classic time sink (15–45 min, 2–8 GB download)
-
-Rust compiles your code, but *linking* the final .exe uses Microsoft's `link.exe`, which ships with
-Visual Studio's C++ tools. This is the step that historically eats a day when skipped.
-
-1. During rustup install, recent versions **detect the missing tools and offer to install them for
-   you** — if you got that prompt and accepted, you're likely done; skip to the verify step.
-2. Manual route: https://visualstudio.microsoft.com/downloads/ → scroll to **"Build Tools for Visual
-   Studio 2022"** (free; it's the compiler tools *without* the Visual Studio IDE) → run installer →
-   check exactly one workload: **"Desktop development with C++"** (this includes the Windows SDK) →
-   Install. Big download; go make coffee.
-3. **The canonical failure**, so you recognize it instead of panicking:
-
-   ```text
-   error: linker `link.exe` not found
-   ```
-
-   This always means step 2 is missing or incomplete. Re-run the Build Tools installer → Modify →
-   confirm "Desktop development with C++" is checked.
-4. **Verify** — don't trust, build (this is also your 0.4 warm-up):
-
-```bash
-cargo new linkcheck && cd linkcheck && cargo run
-```
-
-   Expect: a compile line, then `Hello, world!`. If that printed, your toolchain is DONE — the
-   hardest environment step is behind you. Delete the `linkcheck` folder.
-
-### 0.3 Editor (~10 min)
-
-- VS Code → Extensions → install **rust-analyzer** (the official language server: inline types,
-  errors as you type, go-to-definition). That's the whole setup.
-- Optional but worth it: **CodeLLDB** extension for breakpoint debugging later.
-- Tip while relearning: rust-analyzer's inlay type hints are training wheels that actually teach —
-  leave them on.
-
-### 0.4 Console hello world — crate anatomy (~10 min)
-
-You built one in 0.2; now actually look at it. You're already *in* the project directory
-(alongside the two docs), so initialize the crate **in place** — don't `cargo new`
-(that would nest a folder):
-
-```bash
-cargo init --name pastahandler
-```
-
-- `init` sets up the current directory as the crate; existing files (COMPLIANCE.md, BUILD-GUIDE.md)
-  are untouched.
-- `--name pastahandler` sets the package name explicitly (instead of deriving it from whatever the
-  folder happens to be called), so the exe comes out as `pastahandler.exe`.
-- It also `git init`s the folder if it isn't a repo (it isn't). Feature, not accident — commit at
-  every checkpoint.
-
-Anatomy — one line each, this is the whole mental model:
-
-- `Cargo.toml` — manifest: name, version, dependencies. You edit this.
-- `src/main.rs` — entry point: `fn main()`.
-- `.gitignore` — cargo generated it, already ignores `target/`.
-- `target/` — ALL build output; gigabytes eventually; never commit, delete freely (`cargo clean`).
-- `Cargo.lock` — exact dependency versions; commit it for a binary project.
-
-Your feedback loops, fast to slow: `cargo check` (type-checks only — your main loop while writing),
-`cargo run` (debug build + run), `cargo build --release` (slow, optimized — only for shipping).
-
-### 0.5 Hello-world GUI (~45–60 min — mostly one big first compile)
-
-This window is **not throwaway** — in Segment 4 it grows into the settings UI.
-
-1. In `Cargo.toml`, add under `[dependencies]`:
-
-```toml
-eframe = "0.36"
-```
-
-   (Verified current Aug 2026; if you're reading this later, use whatever docs.rs/eframe says is
-   latest stable.)
-2. **Expectation-setting:** the first `cargo run` after adding eframe downloads and compiles a few
-   hundred crates and takes several *minutes*. This is once. After that, incremental rebuilds are
-   seconds. Do not conclude something is broken at minute three.
-3. Now hand-write the minimal app. The shape (the up-to-date version of this exact skeleton is the
-   first example on docs.rs/eframe — cross-check there, then type your own):
+<details>
+<summary>Spoiler: reference implementation</summary>
 
 ```rust
-struct HelloApp { clicks: u32 }
+// config.rs — add the field to Config (serde(default) keeps old files parsing):
+#[derive(Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Config {
+    pub snippets: Vec<Snippet>,
+    #[serde(default)]
+    pub open_settings_on_launch: bool,
+}
 
-impl eframe::App for HelloApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Hello, PastaHandler");
-            if ui.button("Click me").clicked() { self.clicks += 1; }
-            ui.label(format!("Clicks: {}", self.clicks));
+// resident.rs — extract the spawn (the menu handler becomes call site #1):
+fn spawn_settings() {
+    match std::env::current_exe() {
+        Ok(exe) => {
+            if let Err(e) = std::process::Command::new(exe).arg("--settings").spawn() {
+                eprintln!("failed to launch settings: {e}");
+            }
+        }
+        Err(e) => eprintln!("current_exe failed: {e}"),
+    }
+}
+
+// resident.rs, in run(), after `let tray = Tray::new()?;` — call site #2, startup-only
+// (deliberately NOT re-checked in the reload path: no window popping mid-game):
+if config.open_settings_on_launch {
+    spawn_settings();
+}
+
+// ...and the menu handler's open_id arm collapses to: spawn_settings()
+```
+
+</details>
+
+### 4.1 Skeleton (~30 min)
+
+- `eframe = "0.36"` is already in Cargo.toml. First compile of it takes minutes; that's once.
+- In `settings.rs`: `struct SettingsApp { config_file: ConfigFile, draft: Config, error: Option<String> }`
+  — `draft` is the working copy, loaded once via `config_file.read()?`.
+- `run` body: `eframe::run_native(...)` with a small fixed-ish window (`ViewportBuilder` size
+  ~480×360), creator closure builds `SettingsApp`. Copy the wiring shape from the docs.rs/eframe
+  front page, then type your own.
+- Map eframe's error into `AppError` (one `map_err`; its error type doesn't warrant a variant).
+- Checkpoint: tray → Open Settings → empty egui window appears; close it; process gone.
+
+<details>
+<summary>Spoiler: 4.1 reference implementation (settings.rs)</summary>
+
+```rust
+use eframe::egui;
+
+use crate::{
+    config::{Config, ConfigFile},
+    error::AppError,
+};
+
+struct SettingsApp {
+    config_file: ConfigFile,
+    draft: Config,
+    error: Option<String>,
+}
+
+impl eframe::App for SettingsApp {
+    // eframe 0.36: the trait method is `ui` (older docs/examples show `update`),
+    // and panels are shown inside the provided `Ui`, not from a Context.
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ui, |ui| {
+            ui.heading("PastaHandler — Snippets");
         });
     }
 }
+
+pub fn run(config_file: ConfigFile) -> Result<(), AppError> {
+    let draft = config_file.read()?;
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([520.0, 380.0]),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "PastaHandler Settings",
+        options,
+        Box::new(move |_cc| Ok(Box::new(SettingsApp { config_file, draft, error: None }))),
+    )
+    .map_err(|e| AppError::Config(format!("settings window failed: {e}")))
+}
 ```
 
-   …launched from `main` via `eframe::run_native(...)` with default `NativeOptions` and a closure
-   that constructs your app. Two things to absorb while typing:
-   - **Immediate mode:** `update()` re-declares the entire UI every frame; widgets return whether
-     they were interacted with. State lives in your struct, never in widgets.
-   - The `clicks` counter is there to prove state persists across frames — egui isn't rebuilding
-     your struct, just re-drawing from it.
-4. `cargo run` → window appears, button counts.
+`egui` comes re-exported through eframe (`use eframe::egui;`) — no separate dependency line.
 
-### 0.6 A real release .exe (~15 min)
+</details>
 
-1. Add to `Cargo.toml`:
+### 4.2 The table (~1 evening)
 
-```toml
-[profile.release]
-strip = true
-```
+- `egui::Grid` (header row: Label / Text / Hotkey / actions) — each snippet row: two `TextEdit`s,
+  one hotkey `TextEdit`, a Delete button. Below: an Add button pushing a default `Snippet`.
+- Immediate-mode recap: you re-declare the whole UI every frame in `update()`; widgets return
+  interaction state; all state lives in `SettingsApp`. Nothing is "bound" — you read/write
+  `self.draft.snippets[i].label` directly in the loop.
+- Deleting while iterating: collect the index into an `Option<usize>` during the loop, remove
+  *after* it — you can't mutate the Vec you're iterating (the borrow checker will explain).
 
-2. Kill the console window that flashes behind GUI apps — first line of `main.rs`:
+<details>
+<summary>Spoiler: 4.2 reference implementation (update() body)</summary>
 
 ```rust
-#![windows_subsystem = "windows"]
+fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    egui::CentralPanel::default().show(ui, |ui| {
+        ui.heading("PastaHandler — Snippets");
+        ui.add_space(8.0);
+
+        let mut delete: Option<usize> = None;
+
+        egui::Grid::new("snippets")
+            .striped(true)
+            .num_columns(4)
+            .show(ui, |ui| {
+                ui.strong("Label");
+                ui.strong("Text");
+                ui.strong("Hotkey");
+                ui.strong("");
+                ui.end_row();
+
+                for (i, snippet) in self.draft.snippets.iter_mut().enumerate() {
+                    ui.text_edit_singleline(&mut snippet.label);
+                    ui.text_edit_singleline(&mut snippet.text);
+                    ui.text_edit_singleline(&mut snippet.hotkey);
+                    if ui.button("Delete").clicked() {
+                        delete = Some(i);
+                    }
+                    ui.end_row();
+                }
+            });
+
+        if let Some(i) = delete {
+            self.draft.snippets.remove(i);   // after the loop — the borrow is released here
+        }
+
+        ui.add_space(8.0);
+        if ui.button("Add snippet").clicked() {
+            self.draft.snippets.push(crate::config::Snippet {
+                label: "New".into(),
+                text: String::new(),
+                hotkey: String::new(),
+            });
+        }
+    });
+}
 ```
 
-   Cost: `println!` output now goes nowhere. While developing, comment it out when you need prints.
-3. **CRT landmine (defused now, not in Segment 5):** by default MSVC builds dynamically link
-   Microsoft's C runtime — your exe can fail on a truly clean PC that lacks the VC++ redistributable.
-   Static-link it instead: create `.cargo/config.toml` in the project root:
+Checkpoint for this step: rows render, edits stick between frames (state lives in `self.draft`),
+Add/Delete work. Nothing writes to disk yet — that's 4.3.
+
+</details>
+
+### 4.3 Commit-and-write (the auto-save) (~1 evening)
+
+- **Commit point** = a field losing focus (`response.lost_focus()`) or Enter
+  (`ui.input(|i| i.key_pressed(egui::Key::Enter))`), or Add/Delete clicked. NOT every keystroke —
+  you'd write half-typed hotkeys.
+- On commit: **validate, then write.** Validation = parse every hotkey
+  (`snippet.hotkey.parse::<HotKey>()` — same parser the resident uses) + `HashSet` duplicate check.
+  Valid → `self.config_file.write(&self.draft)` (already atomic: temp + rename). Invalid → set
+  `self.error = Some(msg)`, show it in red under the table (`ui.colored_label`), and *don't write* —
+  the file keeps its last good state, so the resident never even sees the bad edit.
+- This mirrors the resident's own validate-first reload: both processes refuse to act on a config
+  they haven't validated. Belt at both ends, file always sane in between.
+- Checkpoint (this is the v1 payoff moment): resident running → Open Settings → add a snippet with
+  a fresh hotkey → click away (commit) → press the hotkey → **it pastes, no restart, no Notepad,
+  no hand-edited TOML.** Type a garbage hotkey → red error, file untouched, resident unaffected.
+
+<details>
+<summary>Spoiler: 4.3 reference implementation (validation shared with the resident + commit-and-write)</summary>
+
+First, a tiny extraction so both processes validate with the *same* code — in `hotkeys.rs`, pull
+pass 1 of `register_all` out into a free function:
+
+```rust
+// hotkeys.rs
+/// Pass 1 of registration, shared with the settings UI: parse + duplicate-check
+/// every hotkey. No side effects — safe to call on any draft.
+pub fn parse_all(config: &Config) -> Result<Vec<(HotKey, usize)>, AppError> {
+    let mut parsed = Vec::new();
+    let mut seen = HashSet::new();
+    for (i, snippet) in config.snippets.iter().enumerate() {
+        let hotkey: HotKey = snippet.hotkey.parse().map_err(|_| {
+            AppError::Config(format!("bad hotkey '{}' on '{}'", snippet.hotkey, snippet.label))
+        })?;
+        if !seen.insert(hotkey.id()) {
+            return Err(AppError::Config(format!("duplicate hotkey '{}'", snippet.hotkey)));
+        }
+        parsed.push((hotkey, i));
+    }
+    Ok(parsed)
+}
+```
+
+…and `register_all`'s pass 1 becomes one line: `let parsed = parse_all(config)?;`
+
+Then in `update()`, capture commit signals and act after the UI is declared:
+
+```rust
+// inside the Grid row loop — the three text edits now report commits:
+let r1 = ui.text_edit_singleline(&mut snippet.label);
+let r2 = ui.text_edit_singleline(&mut snippet.text);
+let r3 = ui.text_edit_singleline(&mut snippet.hotkey);
+committed |= r1.lost_focus() || r2.lost_focus() || r3.lost_focus();
+// (declare `let mut committed = false;` next to `delete`, before the Grid.
+//  lost_focus() fires on Enter too — no separate key check needed.)
+
+// Delete also commits:
+if let Some(i) = delete {
+    self.draft.snippets.remove(i);
+    committed = true;
+}
+// Add deliberately does NOT commit — a fresh row has an empty hotkey; it gets
+// written when you fill it in and click away.
+
+// after the Add button, the commit handler:
+if committed {
+    match crate::hotkeys::parse_all(&self.draft) {
+        Ok(_) => {
+            self.error = None;
+            if let Err(e) = self.config_file.write(&self.draft) {
+                self.error = Some(e.to_string());
+            }
+        }
+        Err(e) => self.error = Some(e.to_string()),   // file untouched — last good state stands
+    }
+}
+
+if let Some(err) = &self.error {
+    ui.add_space(8.0);
+    ui.colored_label(egui::Color32::RED, err);
+}
+```
+
+</details>
+
+### 4.4 Scope contract (unchanged, non-negotiable)
+
+One window, one screen: table + Add + inline error. No theming, no tray notifications, no
+import/export, no hotkey-recorder widget (a validated text field IS v1), no conflict wizard,
+no single-instance guard. All parked in v2.
+
+---
+
+## Segment 5 — Packaging · 1 evening
+
+1. `[profile.release] strip = true`; `.cargo/config.toml` with
+   `rustflags = ["-C", "target-feature=+crt-static"]` (no VC++ redist dependency on clean machines).
+   `cargo build --release` → sanity-run the exe standalone from another folder.
+
+<details>
+<summary>Spoiler: the two config blocks verbatim</summary>
 
 ```toml
+# Cargo.toml — add:
+[profile.release]
+strip = true
+
+# .cargo/config.toml (new file, project root):
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
 ```
 
-4. Build and prove standalone-ness:
-
-```bash
-cargo build --release
-```
-
-   → `target/release/pastahandler.exe`. Double-click it in Explorer. Copy it alone to `C:\temp\` and run it
-   from there — it must work with nothing beside it.
-
-### 0.7 Mini-installer with Inno Setup (~1–2 h)
-
-1. Install Inno Setup: https://jrsoftware.org/isdl.php (the compiler + a GUI script editor).
-2. Create `installer/hello.iss` — this is a complete, working script; type it, compile it in the
-   Inno editor (Build → Compile), and read each directive as you go (Inno's F1 help is excellent):
+</details>
+2. Exe icon (optional polish): generate sizes from `assets/icon.svg` with resvg (installed) —
+   16/32/48/256 → pack as `.ico` → `winresource` crate or an `.rc` step. Skippable for v1.
+3. Inno Setup (https://jrsoftware.org/isdl.php) → `installer/pastahandler.iss`:
 
 ```iss
 [Setup]
-AppName=PastaHello
-AppVersion=0.0.1
-DefaultDirName={autopf}\PastaHello
-OutputBaseFilename=pastahandler-hello-setup
+AppName=PastaHandler
+AppVersion=0.1.0
+DefaultDirName={autopf}\PastaHandler
+OutputBaseFilename=pastahandler-setup-0.1.0
 Compression=lzma2
 SolidCompression=yes
 
 [Files]
 Source: "..\target\release\pastahandler.exe"; DestDir: "{app}"
 
+[Tasks]
+Name: "startup"; Description: "Start PastaHandler when Windows starts"; Flags: unchecked
+
 [Icons]
-Name: "{autoprograms}\PastaHello"; Filename: "{app}\pastahandler.exe"
+Name: "{autoprograms}\PastaHandler"; Filename: "{app}\pastahandler.exe"
+Name: "{userstartup}\PastaHandler"; Filename: "{app}\pastahandler.exe"; Tasks: startup
 
 [Run]
 Filename: "{app}\pastahandler.exe"; Description: "Launch now"; Flags: nowait postinstall skipifsilent
 ```
 
-3. Run the produced `pastahandler-hello-setup.exe`: installs to Program Files, Start-menu entry appears,
-   app launches from it. Then Settings → Apps → uninstall — confirm it removes cleanly.
-4. **SmartScreen honesty:** your locally built installer will NOT trigger SmartScreen — the warning
-   is driven by Mark-of-the-Web, which only downloaded files carry. To see what real users see,
-   upload the installer somewhere (GitHub release, Drive) and download it back, then run. Expect
-   "Windows protected your PC" → *More info* → *Run anyway*. That's the unsigned-v1 experience;
-   code-signing is the v2 fix.
-
-### ✅ Segment 0 checkpoint
-
-Hello GUI app, built in release mode, installed through a real installer, launched from the Start
-menu, uninstalled cleanly. **Your environment is proven end-to-end. Everything after this is just
-Rust.**
-
----
-
-## Segment 1 — Resident skeleton: hotkey → clipboard
-
-**Goal:** one hardcoded snippet, one hardcoded hotkey, clipboard write. The resident process's whole
-spine — event loop → hotkey event → clipboard — in the fewest possible lines.
-
-### Steps
-
-1. Add `global-hotkey`, `arboard`, `tao` to dependencies.
-2. Comment out `#![windows_subsystem = "windows"]` for now — you want `println!` back while
-   developing. (It returns in Segment 3.)
-3. Set the eframe hello code aside — move it into a `settings.rs` module (unused for now; it comes
-   back in Segment 4). Add the two-line dispatch at the top of `main`: if
-   `std::env::args().any(|a| a == "--settings")`, run the (stubbed) settings app; otherwise run the
-   resident loop you're about to write.
-4. Write the resident loop in `main.rs`.
-
-### The unguessable wiring
-
-`GlobalHotKeyManager` must live on a thread with a running Win32 event loop, and hotkey events arrive
-on a **global channel**, not through the loop. The shape (cross-check `global-hotkey`'s
-`examples/tao.rs`):
-
-```rust
-use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, hotkey::{Code, HotKey, Modifiers}};
-use tao::event_loop::{ControlFlow, EventLoopBuilder};
-
-fn main() {
-    let event_loop = EventLoopBuilder::new().build();
-
-    let manager = GlobalHotKeyManager::new().unwrap();      // must stay alive — gotcha 1
-    let hotkey = HotKey::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Digit1);
-    manager.register(hotkey).unwrap();
-
-    let hotkey_rx = GlobalHotKeyEvent::receiver();          // global crossbeam channel
-
-    event_loop.run(move |_event, _target, control_flow| {
-        *control_flow = ControlFlow::Poll;                  // heartbeat comes in Segment 3
-        if let Ok(event) = hotkey_rx.try_recv() {
-            // match event.id() against hotkey.id(), check event.state — then clipboard write
-        }
-    });
-}
-```
-
-Clipboard write is two lines with `arboard`: `Clipboard::new()`, `.set_text(...)`. Both return
-`Result` — `unwrap()` is fine for this segment; Segment 2 replaces every unwrap with real plumbing.
-
-### Gotchas
-
-1. **Keep the `GlobalHotKeyManager` alive.** If it drops, hotkeys silently unregister. The `move`
-   closure capturing it suffices — but refactor it into a function that returns, and it dies. A
-   genuinely instructive ownership bug; hit it once on purpose.
-2. **Hotkey events fire on press AND release** — check `event.state` for `HotKeyState::Pressed`
-   only, or every press writes the clipboard twice.
-3. **Clipboard contention:** the Windows clipboard is shared; a write can transiently fail if
-   another app holds it open. A 3-attempt/50 ms retry makes it robust — fine to defer to Segment 2
-   where error handling lives.
-4. `ControlFlow::Poll` spins a core's worth of wakeups — acceptable for this segment only; the
-   proper heartbeat arrives with the tray.
-
-### ✅ Checkpoint
-
-`cargo run`, press `Ctrl+Alt+1`, `Ctrl+V` into Notepad → your string appears. Quit the app,
-`Ctrl+V` again → **still pastes** (Windows owns clipboard data after `SetClipboardData` — this is
-why PastaHandler needs no daemon).
-
-**Re-learned:** ownership/lifetime of a manager object, `move` closures, channels (`try_recv`),
-first `Result`s.
-
----
-
-## Segment 2 — Config: multiple snippets, real error handling
-
-**Goal:** snippets in `%APPDATA%\pastahandler\config.toml`; all hotkeys registered at startup; every fallible
-operation returns a typed `Result`. The module layout and error convention you set here carry to the
-end.
-
-### Module layout
-
-```
-src/
-  main.rs        // dispatch (--settings vs resident); resident loop lives here
-  error.rs       // AppError + Result alias
-  config.rs      // Snippet, Config, load/save
-  hotkeys.rs     // registration map: hotkey id -> snippet index
-  clipboard.rs   // write_text(&str) -> Result<()>  (retry lives here)
-  settings.rs    // parked eframe app (Segment 4)
-```
-
-### The error convention (your global standard, Rust edition)
-
-Rust's `Result` **is** the discriminated union you use in TypeScript — the language enforces the
-discrimination. Hand-roll the enum (you're relearning; `thiserror` is the production shortcut to
-adopt later, once writing `Display` by hand gets old):
-
-```rust
-// error.rs
-#[derive(Debug)]
-pub enum AppError {
-    Io(std::io::Error),
-    TomlParse(toml::de::Error),
-    TomlWrite(toml::ser::Error),
-    Hotkey(global_hotkey::Error),
-    Clipboard(arboard::Error),
-    Config(String),              // domain errors: bad hotkey string, duplicate combo…
-}
-
-pub type Result<T> = std::result::Result<T, AppError>;
-```
-
-Write `From<std::io::Error> for AppError` (and one per wrapped type) — that's what makes `?` work,
-and `?` is the entire ergonomic payoff. Impl `Display` so errors read like sentences. Your global
-rules apply verbatim: propagate what you can't handle, never log-and-ignore, `panic!` only for
-invariant violations.
-
-### Config shapes
-
-```rust
-// config.rs
-#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
-pub struct Snippet {
-    pub label: String,      // "My Twitch"
-    pub text: String,       // "twitch.tv/yourname"
-    pub hotkey: String,     // "ctrl+alt+Digit1" — global-hotkey's FromStr format
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Default, PartialEq)]
-pub struct Config { pub snippets: Vec<Snippet> }
-
-pub fn config_path() -> Result<std::path::PathBuf>;         // %APPDATA%\pastahandler\config.toml
-pub fn load_from(path: &Path) -> Result<Config>;            // missing file => Ok(default)
-pub fn save_to(path: &Path, config: &Config) -> Result<()>; // create_dir_all first
-```
-
-(Path-taking functions + thin `%APPDATA%` wrappers = testable against temp dirs. Oldest trick
-there is.)
-
-Facts you'd otherwise hunt for:
-
-- `std::env::var("APPDATA")` → roaming AppData. Returns `Result`; plumb it.
-- **`HotKey` implements `FromStr`**: `"ctrl+alt+Digit1".parse::<HotKey>()`. Key names are W3C
-  UI-Events codes (`Digit1`, `KeyQ`, `F5`); modifiers `ctrl`/`alt`/`shift`/`super`, case-insensitive.
-  String form in TOML keeps the config hand-editable. Map parse failures into `AppError::Config`
-  naming the offending string.
-- `toml::from_str` / `toml::to_string_pretty` once serde derives are on.
-
-### Registration map
-
-`hotkeys.rs`: `register_all(manager: &GlobalHotKeyManager, config: &Config) ->
-Result<HashMap<u32, usize>>` — parse each snippet's combo, register, map `hotkey.id()` → snippet
-index. Resident handler becomes: `event.id()` → map → snippet → `clipboard::write_text`. Reject
-duplicates with a `HashSet` → `AppError::Config`. Also: `manager.register()` errors if *any* app on
-the system already owns that combo — surface that message readably; it will happen.
-
-### ✅ Checkpoint
-
-Hand-write a config.toml with two snippets → both paste. Break the TOML on purpose (bad hotkey
-string, syntax error) → readable error naming the problem, not a panic.
-
-**Re-learned:** modules/visibility, serde derive, `From` + `?`, enum error design,
-`HashMap`/`HashSet`, domain vs wrapped errors.
-
----
-
-## Segment 3 — Tray: the app disappears
-
-**Goal:** no console; PastaHandler lives in the tray with **Open Settings** (spawns the settings process —
-stub UI for now) and **Quit**.
-
-### Steps
-
-1. Add `tray-icon = "0.24"` and `image = "0.25"`. Make/find a 32×32 PNG at `assets/icon.png`.
-2. `tray.rs`: build icon + menu, return the `TrayIcon` handle to `main.rs` — same rule as the hotkey
-   manager: **drop the handle and the icon vanishes.**
-3. Wire menu events into the loop; **Open Settings** spawns the second process:
-
-```rust
-std::process::Command::new(std::env::current_exe()?).arg("--settings").spawn()?;
-```
-
-   (Settings still shows the hello window from Segment 0 — that's fine; it proves the spawn.)
-4. Replace `ControlFlow::Poll` with the real heartbeat:
-   `ControlFlow::WaitUntil(Instant::now() + Duration::from_secs(1))`. Hotkey presses and menu clicks
-   arrive as thread messages and wake the loop instantly on their own — the 1 s heartbeat exists only
-   for Segment 4's config-file check. Idle CPU: ~0%.
-5. Re-enable `#![windows_subsystem = "windows"]`.
-
-### The unguessable parts
-
-- Icon: `tray_icon::Icon::from_rgba(rgba, w, h)`; get bytes via
-  `image::load_from_memory(include_bytes!("../assets/icon.png"))` → `.to_rgba8()` → `.into_raw()`
-  + dimensions (the pattern tray-icon's own examples use).
-- Menu (re-exported `muda` API):
-
-```rust
-use tray_icon::{TrayIconBuilder, menu::{Menu, MenuItem, MenuEvent}};
-
-let menu = Menu::new();
-let open_item = MenuItem::new("Open Settings", true, None);  // keep for id comparison
-let quit_item = MenuItem::new("Quit", true, None);
-menu.append_items(&[&open_item, &quit_item]).unwrap();
-
-let _tray = TrayIconBuilder::new()
-    .with_menu(Box::new(menu))
-    .with_tooltip("PastaHandler")
-    .with_icon(icon)
-    .build().unwrap();
-```
-
-- Menu clicks: another global channel — `MenuEvent::receiver()`, `try_recv()` in the same loop,
-  compare `event.id` to `quit_item.id()`; Quit → `*control_flow = ControlFlow::Exit`.
-
-### Gotchas
-
-- Build the tray on the event-loop thread (you are, if it's constructed in `main` before `run` —
-  don't get clever with threads).
-- With `windows_subsystem` back on, `println!` is gone — comment the attribute out when debugging;
-  a logging framework for a tool this size is v2 gold-plating.
-
-### ✅ Checkpoint
-
-No console; icon in tray; hotkeys still paste; tooltip on hover; Open Settings spawns the hello
-window as a separate process (watch it appear and vanish in Task Manager); Quit exits cleanly.
-
-**Re-learned:** `include_bytes!`, handle-lifetime bugs, multiplexing channels through one loop,
-process spawning.
-
----
-
-## Segment 4 — Settings window (its own process)
-
-**Goal:** grow the Segment-0 hello window into the real settings UI. Because it's a separate
-process, there is **no event-loop integration problem** — this is a bog-standard eframe app that
-reads and writes a TOML file.
-
-### Settings side (`settings.rs`)
-
-- App state: a `Config` (loaded at startup via Segment 2's `load_from`), plus edit-buffer fields.
-- UI, one screen: snippet table (label / text / hotkey), Add / Edit / Delete, Save. `egui::Grid`
-  does the table; `TextEdit` for fields.
-- **Hotkey field is a validated text input, not a key recorder.** Format `ctrl+alt+Digit1`,
-  validated on Save with the *same* `.parse::<HotKey>()` from Segment 2 — reuse, don't rewrite.
-  Inline error string on failure. (A press-keys-now recorder reads raw keyboard state — exactly the
-  smell this app exists to avoid, and a rabbit hole. v2, maybe never.)
-- Duplicate-combo guard: same `HashSet` logic — reuse it from `hotkeys.rs`.
-- **Save atomically:** write to `config.toml.tmp`, then `std::fs::rename` over the real file.
-  Rename-on-same-volume is atomic; the resident process can never observe a half-written file.
-
-### Resident side (small addition)
-
-On each 1 s heartbeat: `fs::metadata(&path)?.modified()` → compare to the last-seen mtime → if
-changed: reload config, unregister old hotkeys, register new (keep the old `Vec<HotKey>` around;
-`GlobalHotKeyManager` has `unregister` and a bulk `unregister_all` — check the current signature),
-swap the id→index map. This also picks up hand-edited TOML for free.
-
-### The anti-scope-creep contract
-
-One window, one screen, the widgets named above. No theming, no tray notifications, no
-import/export, no conflict-resolution wizard, no single-instance guard. Anything more is v2 —
-you're here to ship, not decorate.
-
-### ✅ Checkpoint
-
-Full loop, no hand-edited TOML: tray → Open Settings → add snippet + hotkey → Save → *without
-restarting anything* the hotkey works → `Ctrl+V` pastes. Edit text → paste reflects it. Delete →
-hotkey dead. Close settings → process gone from Task Manager; resident unaffected. Duplicate hotkey
-→ inline error. Quit → resident exits.
-
-**Re-learned:** immediate-mode UI state, file-based IPC between processes, atomic writes, and that
-the simplest coordination mechanism (a file + mtime) is usually enough.
-
----
-
-## Segment 5 — Final packaging
-
-**Goal:** the real installer. Short segment — you learned Inno in 0.7; this is adaptation.
-
-1. Copy `installer/hello.iss` → `installer/pastahandler.iss`; update names/version; add the optional
-   start-with-Windows task:
-
-```iss
-[Tasks]
-Name: "startup"; Description: "Start PastaHandler when Windows starts"; Flags: unchecked
-
-[Icons]
-Name: "{userstartup}\PastaHandler"; Filename: "{app}\pastahandler.exe"; Tasks: startup
-```
-
-2. Write the user-facing `README.md`. It MUST contain:
-   - **SmartScreen walkthrough** with screenshots (download your own installer to reproduce it —
-     see 0.7): "Windows protected your PC" → *More info* → *Run anyway*. Normal for unsigned
-     software; signing is v2 (OV cert ≈ $100–400/yr; EV / Azure Trusted Signing kills the warning
-     immediately; reputation accrues per identity, so start signing before wide distribution).
-   - **The usage note from COMPLIANCE.md §4:** paste in-context and sparingly — spamming the same
-     link every game risks chat restrictions under Riot's spam clause regardless of how the text got
-     into the clipboard.
-
-### ✅ Checkpoint
-
-On a machine/VM/second account that has never seen the project: download the installer → SmartScreen
-click-through → install → tray icon → add snippet → hotkey → paste → uninstall cleanly.
+4. User-facing `README.md` — must contain:
+   - **SmartScreen walkthrough with screenshots.** Locally built files carry no Mark-of-the-Web —
+     to reproduce what users see, upload the installer somewhere and download it back, then run:
+     "Windows protected your PC" → *More info* → *Run anyway*. Code-signing kills this in v2
+     (OV cert ≈ $100–400/yr; EV / Azure Trusted Signing = immediate trust).
+   - **The COMPLIANCE.md §4 usage note:** paste in-context and sparingly — spamming the same link
+     every game risks chat restrictions under Riot's spam clause regardless of tooling.
+5. Checkpoint: on a machine/VM that's never seen the project — download installer → SmartScreen
+   click-through → install → tray icon → add snippet via settings UI → hotkey pastes → uninstall
+   cleanly via Settings → Apps.
 
 ---
 
 ## Verification (before calling v1 done)
 
-**Unit tests** (`cargo test`):
-- Config round-trip: build a `Config`, `save_to` a temp path (`std::env::temp_dir()`), `load_from`,
-  assert equality (`PartialEq` already derived).
-- Hotkey parsing: valid strings parse; garbage → `AppError::Config`, never a panic.
-- Clipboard write→read-back — mark `#[ignore]` (clipboard tests misbehave headless/parallel); run
-  explicitly via `cargo test -- --ignored`.
-
-**Manual E2E:** Segment 4 + 5 checkpoints, then the real thing — League open, hotkey, `Ctrl+V` in
-chat (post-game lobby is a friendlier first test than mid-match).
-
-**Performance receipts** (the posture, verified):
-- Task Manager → Details → add the GPU column: resident `pastahandler.exe` shows **0% GPU / no GPU memory**,
-  including while a game runs.
-- Idle CPU ≈ 0.0%; RAM single-digit MB.
-- Settings process appears on Open Settings and is *gone* from Task Manager after close.
-
-**Compliance receipt** (COMPLIANCE.md §6) — must return nothing:
+- **Unit** (`cargo test`): config round-trip via temp path; hotkey parse rejects garbage as
+  `AppError::Config`; clipboard write→read-back marked `#[ignore]`.
+- **E2E:** Segment 4 + 5 checkpoints, then League itself — hotkey → `Ctrl+V` in post-game lobby chat.
+- **Performance receipts:** Task Manager GPU column: resident = 0% GPU always (game running too);
+  settings process appears on open, *gone* after close; idle CPU ≈ 0%.
+- **Compliance receipt** (must return nothing):
 
 ```bash
 grep -rnE "SendInput|keybd_event|SetWindowsHookEx|OpenProcess|ReadProcessMemory|WriteProcessMemory" src/
 ```
 
----
+- **Known cosmetic quirk:** a killed (not quit) resident may ghost its tray icon until mouseover —
+  Windows behavior, not a bug.
 
-## v2 parking lot (write ideas here instead of building them)
+## v2 parking lot (write ideas here, don't build them)
 
-Code-signing cert · hotkey-capture widget · single-instance guard for settings · `notify` crate
-instead of mtime polling · import/export · logging · `thiserror` migration · cross-platform (all
-core crates already are — the door is open) · **never**: auto-paste.
+Code signing · exe `.ico` if skipped · hotkey-recorder widget · single-instance guards (resident
+named-mutex; settings window focus-instead-of-second) · `notify` crate over mtime polling ·
+import/export · log file next to config.toml (reload failures are invisible once the console is
+gone — first real v2 item) · `thiserror` migration · cross-platform · **never**: auto-paste.

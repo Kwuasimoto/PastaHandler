@@ -1,8 +1,14 @@
+use std::fmt::Debug;
+
 #[derive(Debug)]
 pub enum AppError {
     Io(std::io::Error),
     TomlParse(toml::de::Error),
     TomlWrite(toml::ser::Error),
+    Image(image::ImageError),
+    BadIcon(tray_icon::BadIcon),
+    TrayIcon(tray_icon::Error),
+    TrayMenu(tray_icon::menu::Error),
     Hotkey(global_hotkey::Error),
     Clipboard(arboard::Error),
     Config(String),
@@ -40,12 +46,40 @@ impl From<toml::de::Error> for AppError {
     }
 }
 
+impl From<image::ImageError> for AppError {
+    fn from(e: image::ImageError) -> Self {
+        AppError::Image(e)
+    }
+}
+
+impl From<tray_icon::Error> for AppError {
+    fn from(e: tray_icon::Error) -> Self {
+        AppError::TrayIcon(e)
+    }
+}
+
+impl From<tray_icon::menu::Error> for AppError {
+    fn from(e: tray_icon::menu::Error) -> Self {
+        AppError::TrayMenu(e)
+    }
+}
+
+impl From<tray_icon::BadIcon> for AppError {
+    fn from(e: tray_icon::BadIcon) -> Self {
+        AppError::BadIcon(e)
+    }
+}
+
 impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AppError::Io(e) => write!(f, "file error: {e}"),
             AppError::TomlParse(e) => write!(f, "config serialize error: {e}"),
             AppError::TomlWrite(e) => write!(f, "config write error: {e}"),
+            AppError::Image(e) => write!(f, "image error: {e}"),
+            AppError::BadIcon(e) => write!(f, "bad icon error: {e}"),
+            AppError::TrayIcon(e) => write!(f, "tray icon error: {e}"),
+            AppError::TrayMenu(e) => write!(f, "tray error: {e}"),
             AppError::Hotkey(e) => write!(f, "hotkey error: {e}"),
             AppError::Clipboard(e) => write!(f, "clipboard error: {e}"),
             AppError::Config(e) => write!(f, "config error: {e}"),
