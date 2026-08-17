@@ -1,17 +1,17 @@
 use eframe::egui;
 
 use crate::{
-    config::{Config, ConfigFile, Theme},
+    config::{Config, ConfigFile},
     error::AppError,
 };
 
 mod chrome;
+mod header;
 mod style;
 mod theme_window;
 mod widgets;
 
-use chrome::{caption_button, CaptionIcon};
-use style::{apply_style, install_fonts, mascot_for, on_color, rgb, Palette};
+use style::{apply_style, install_fonts, mascot_for, Palette};
 use theme_window::ThemeWindow;
 use widgets::toggle_switch;
 
@@ -32,44 +32,6 @@ struct SettingsApp {
     /// Debug builds only: F12 toggles egui's live style editor.
     #[cfg(debug_assertions)]
     style_editor: bool,
-}
-
-/// Header theme button: a 2x2 grid of the CURRENT theme's colors — the control
-/// previews its own subject. Ghost style with a hover backplate.
-fn theme_swatch_button(ui: &mut egui::Ui, theme: &Theme) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(32.0, 26.0), egui::Sense::click());
-    if ui.is_rect_visible(rect) {
-        if response.hovered() {
-            ui.painter().rect_filled(
-                rect,
-                ui.visuals().widgets.hovered.corner_radius,
-                ui.visuals().widgets.hovered.weak_bg_fill,
-            );
-        }
-        let s = 8.0;
-        let gap = 2.0;
-        let total = 2.0 * s + gap;
-        let origin = rect.center() - egui::vec2(total / 2.0, total / 2.0);
-        let colors = [
-            rgb(theme.accent),
-            rgb(theme.background),
-            rgb(theme.text),
-            rgb(theme.border),
-        ];
-        for (i, color) in colors.iter().enumerate() {
-            let x = (i % 2) as f32 * (s + gap);
-            let y = (i / 2) as f32 * (s + gap);
-            let sw = egui::Rect::from_min_size(origin + egui::vec2(x, y), egui::vec2(s, s));
-            ui.painter().rect_filled(sw, egui::CornerRadius::same(2), *color);
-            ui.painter().rect_stroke(
-                sw,
-                egui::CornerRadius::same(2),
-                egui::Stroke::new(1.0, rgb(theme.border)),
-                egui::StrokeKind::Inside,
-            );
-        }
-    }
-    response.on_hover_text("Theme")
 }
 
 /// Build a global-hotkey combo string from egui input. global-hotkey's parser
@@ -128,90 +90,22 @@ impl eframe::App for SettingsApp {
             let mut just_activated: Option<usize> = None;
             let mut hovered_delete_now: Option<usize> = None;
 
-            // ONE deck: mascot left (+ small window title when chromeless), actions
-            // right, caption controls rightmost. Whole deck drags in borderless mode.
-            if self.draft.theme.borderless {
-                let deck_rect = {
-                    let mut r = ui.max_rect();
-                    r.max.y = r.min.y + 56.0;
-                    r
-                };
-                let ctx = ui.ctx().clone();
-                let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                let bar = ui.interact(
-                    deck_rect,
-                    egui::Id::new("titlebar-deck"),
-                    egui::Sense::click_and_drag(),
-                );
-                if bar.drag_started_by(egui::PointerButton::Primary) {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-                }
-                if bar.double_clicked() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
-                }
-            }
-
             // computed pre-theme-window: a background edit updates the mascot
             // next frame, by design
             let mascot = mascot_for(&self.draft.theme);
 
-            ui.horizontal(|ui| {
-                ui.add(
-                    egui::Image::new(mascot.clone()).fit_to_exact_size(egui::vec2(63.0, 52.0)),
-                );
-                if self.draft.theme.borderless {
-                    // stands in for the OS title bar text that decorations provide
-                    ui.add_space(4.0);
-                    ui.label(egui::RichText::new("PastaHandler Settings").weak());
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if self.draft.theme.borderless {
-                        let ctx = ui.ctx().clone();
-                        let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                        if caption_button(ui, CaptionIcon::Close, true).clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        let max_icon = if maximized {
-                            CaptionIcon::Restore
-                        } else {
-                            CaptionIcon::Maximize
-                        };
-                        if caption_button(ui, max_icon, false).clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
-                        }
-                        if caption_button(ui, CaptionIcon::Minimize, false).clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                        }
-                        ui.add_space(10.0);
-                    }
-                    // primary button: accent-filled — accent's permanent, visible home
-                    let header_accent = rgb(self.draft.theme.accent);
-                    let add = egui::Button::new(
-                        egui::RichText::new("+  Add snippet").color(on_color(header_accent)),
-                    )
-                    .fill(header_accent);
-                    if ui.add(add).clicked() {
-                        self.draft.snippets.push(crate::config::Snippet {
-                            text: String::new(),
-                            hotkey: String::new(),
-                            active: false, // capture (or the toggle) activates it later
-                        });
-                    }
-                    if theme_swatch_button(ui, &self.draft.theme).clicked() {
-                        self.theme_window.open = !self.theme_window.open;
-                    }
+            let header_out = header::show(ui, &self.draft.theme, mascot.clone());
+            if header_out.add_snippet {
+                self.draft.snippets.push(crate::config::Snippet {
+                    text: String::new(),
+                    hotkey: String::new(),
+                    active: false, // capture (or the toggle) activates it later
                 });
-            });
-            ui.add_space(8.0);
-            // inset hairline — softer than a full-bleed rule
-            let sep_rect = ui.max_rect();
-            let sep_y = ui.cursor().top();
-            ui.painter().hline(
-                (sep_rect.left() + 8.0)..=(sep_rect.right() - 8.0),
-                sep_y,
-                ui.visuals().widgets.noninteractive.bg_stroke,
-            );
-            ui.add_space(14.0);
+            }
+            if header_out.toggle_theme {
+                // flipped BEFORE the theme window shows — same-frame open
+                self.theme_window.open = !self.theme_window.open;
+            }
 
             // theme window renders BEFORE the palette is built, so edits recolor
             // the table the same frame; themes auto-save like everything else
