@@ -40,9 +40,12 @@ one is active (alternate texts you switch between); the config is a hand-editabl
 ## Make it yours
 
 The swatch button in the header opens the theme editor: five colors and a corner radius — every
-other shade in the UI is derived from those, so any combination stays cohesive. Two presets ship
-(the default dark and **Sakura**), and a **borderless mode** swaps the OS window frame for the
-app's own title bar. Theme edits apply live and save automatically, like everything else.
+other shade in the UI is derived from those, so any combination stays cohesive. Ten preset
+palettes ship (Sakura, Cosmic, Coffee, League, Halo, …), each previewed as a card in its own
+colors. Beyond colors: a **borderless mode** swaps the OS window frame for the app's own title
+bar, a **background image** (bring your own PNG, or one click on the bundled sakura art), and an
+**opacity** slider that turns the canvas to frosted or clear glass over your desktop — the
+controls stay solid and readable. Everything applies live and saves automatically.
 
 ## Fair-play note (League of Legends and other games)
 

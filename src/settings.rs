@@ -273,7 +273,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
             }))
         }),
     )
-    .map_err(|e| AppError::Config(format!("settings window failed: {e}")))
+    .map_err(|e| AppError::Gui(e.to_string()))
 }
 
 #[cfg(test)]

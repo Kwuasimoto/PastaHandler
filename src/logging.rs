@@ -19,8 +19,18 @@ pub fn log_event(msg: &str) {
     let Some(dir) = path.parent() else { return };
     let _ = std::fs::create_dir_all(dir);
     let log_path = dir.join("pastahandler.log");
+    rotate_if_large(&log_path, 512 * 1024);
     if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(log_path) {
         let _ = writeln!(file, "[{}] {}", timestamp_utc(), msg);
+    }
+}
+
+/// A log that only grows eventually fills someone's disk: past `max_bytes` the
+/// file rolls to `.log.old` (one generation), bounding total use at ~2×max.
+fn rotate_if_large(log_path: &std::path::Path, max_bytes: u64) {
+    let Ok(meta) = std::fs::metadata(log_path) else { return };
+    if meta.len() >= max_bytes {
+        let _ = std::fs::rename(log_path, log_path.with_extension("log.old"));
     }
 }
 
@@ -53,6 +63,17 @@ fn format_epoch(secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rotation_rolls_a_full_log_to_old() {
+        let path = std::env::temp_dir().join(format!("ph-log-test-{}.log", std::process::id()));
+        let old = path.with_extension("log.old");
+        std::fs::write(&path, vec![b'x'; 600]).expect("seed log");
+        rotate_if_large(&path, 512);
+        assert!(!path.exists(), "full log must roll away");
+        assert!(old.exists(), "rolled log becomes .log.old");
+        let _ = std::fs::remove_file(&old);
+    }
 
     #[test]
     fn format_epoch_matches_known_dates() {

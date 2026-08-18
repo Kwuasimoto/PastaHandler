@@ -11,7 +11,11 @@ pub enum AppError {
     TrayMenu(tray_icon::menu::Error),
     Hotkey(global_hotkey::Error),
     Clipboard(arboard::Error),
+    /// Config-content problems in the user's own data: bad hotkey strings,
+    /// duplicate active combos, a missing APPDATA. The message is user-facing.
     Config(String),
+    /// The settings window itself failed to launch or run (eframe/GPU layer).
+    Gui(String),
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;
@@ -74,7 +78,7 @@ impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AppError::Io(e) => write!(f, "file error: {e}"),
-            AppError::TomlParse(e) => write!(f, "config serialize error: {e}"),
+            AppError::TomlParse(e) => write!(f, "config parse error: {e}"),
             AppError::TomlWrite(e) => write!(f, "config write error: {e}"),
             AppError::Image(e) => write!(f, "image error: {e}"),
             AppError::BadIcon(e) => write!(f, "bad icon error: {e}"),
@@ -83,6 +87,7 @@ impl std::fmt::Display for AppError {
             AppError::Hotkey(e) => write!(f, "hotkey error: {e}"),
             AppError::Clipboard(e) => write!(f, "clipboard error: {e}"),
             AppError::Config(e) => write!(f, "config error: {e}"),
+            AppError::Gui(e) => write!(f, "settings window error: {e}"),
         }
     }
 }
