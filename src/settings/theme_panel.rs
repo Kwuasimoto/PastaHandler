@@ -92,7 +92,9 @@ impl ThemePanel {
 
                     // short main window => theme sections scroll into reach
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        ui.set_width(WIDTH - 16.0 - 8.0); // content stays 8px clear of the bar
+                        // 12px: 8 of breathing room + 4 so the floating bar can
+                        // fatten on hover without overlapping the content
+                        ui.set_width(WIDTH - 16.0 - 12.0);
                         ui.label(egui::RichText::new("PRESETS").small().weak());
                         ui.add_space(2.0);
                         ui.horizontal(|ui| {
