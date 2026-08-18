@@ -140,22 +140,11 @@ impl SnippetTable {
                                     Some(hint) => (hint, egui::Color32::from_rgb(220, 80, 80)),
                                     None => ("press keys…", palette.accent),
                                 };
-                                // 24 renders as 26 (stroke adds 1px above and
-                                // below) — and the button only honors 24 when
-                                // its padding lets the intrinsic size fit
-                                let resp = ui
-                                    .scope(|ui| {
-                                        ui.spacing_mut().button_padding.y = 2.0;
-                                        ui.add_sized(
-                                            [HOTKEY_W, 24.0],
-                                            egui::Button::new(
-                                                egui::RichText::new(prompt)
-                                                    .italics()
-                                                    .color(color),
-                                            ),
-                                        )
-                                    })
-                                    .inner;
+                                let resp = hotkey_chip(
+                                    ui,
+                                    HOTKEY_W,
+                                    egui::RichText::new(prompt).italics().color(color),
+                                );
                                 let events = ui.input(|inp| inp.events.clone());
                                 for ev in events {
                                     if let egui::Event::Key {
@@ -201,12 +190,7 @@ impl SnippetTable {
                                 } else {
                                     egui::RichText::new(&snippet.hotkey).color(palette.dim)
                                 };
-                                if ui
-                                    .scope(|ui| {
-                                        ui.spacing_mut().button_padding.y = 2.0;
-                                        ui.add_sized([HOTKEY_W, 24.0], egui::Button::new(label))
-                                    })
-                                    .inner
+                                if hotkey_chip(ui, HOTKEY_W, label)
                                     .on_hover_text("Click, then press the key combo (Esc cancels)")
                                     .clicked()
                                 {
@@ -253,6 +237,40 @@ impl SnippetTable {
 
         out
     }
+}
+
+/// The hotkey cell's button, hand-painted: a stock egui Button strokes its
+/// border centered on the rect edge (half a pixel outside), which lands its
+/// visible band 1px off the TextEdits beside it no matter how the rect is
+/// nudged. This chip paints fill + inside-stroke exactly like an input does,
+/// so the row's controls share one pixel band.
+fn hotkey_chip(ui: &mut egui::Ui, width: f32, label: egui::RichText) -> egui::Response {
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(width, 26.0), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let v = ui.visuals();
+        let w = if response.is_pointer_button_down_on() {
+            &v.widgets.active
+        } else if response.hovered() {
+            &v.widgets.hovered
+        } else {
+            &v.widgets.inactive
+        };
+        let (fill, stroke, radius) = (w.weak_bg_fill, w.bg_stroke, w.corner_radius);
+        ui.painter().rect_filled(rect, radius, fill);
+        ui.painter()
+            .rect_stroke(rect, radius, stroke, egui::StrokeKind::Inside);
+        let galley = egui::WidgetText::from(label).into_galley(
+            ui,
+            Some(egui::TextWrapMode::Extend),
+            width,
+            egui::TextStyle::Button,
+        );
+        let pos = rect.center() - galley.size() / 2.0;
+        let fallback = ui.visuals().widgets.inactive.fg_stroke.color;
+        ui.painter().galley(pos, galley, fallback);
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// Build a global-hotkey combo string from egui input. global-hotkey's parser
