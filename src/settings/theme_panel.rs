@@ -20,11 +20,15 @@ const WIDTH: f32 = 250.0;
 
 pub struct ThemePanel {
     pub open: bool,
+    /// In-flight native file dialog. rfd's pick_file BLOCKS its thread — run
+    /// on the UI thread it freezes the window white if the dialog opens
+    /// behind it. So it runs on its own thread and we poll the result here.
+    picker: Option<std::sync::mpsc::Receiver<Option<std::path::PathBuf>>>,
 }
 
 impl ThemePanel {
     pub fn new() -> Self {
-        Self { open: false }
+        Self { open: false, picker: None }
     }
 
     /// Renders (sliding in over the content) while open; applies the style
@@ -47,6 +51,9 @@ impl ThemePanel {
         }
         let mut changed = false;
         let mut close = false;
+        let self_picker_active = self.picker.is_some();
+        let mut picker_started: Option<std::sync::mpsc::Receiver<Option<std::path::PathBuf>>> =
+            None;
         let screen = ctx.content_rect();
         let frame = egui::Frame::new()
             .fill(ui.visuals().window_fill) // the derived raised-surface shade
@@ -237,13 +244,24 @@ impl ThemePanel {
                         ui.label("Background image");
                         ui.add_space(2.0);
                         ui.horizontal(|ui| {
-                            if ui.button("Browse…").clicked()
-                                && let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("Images", &["png", "jpg", "jpeg", "bmp", "webp"])
-                                    .pick_file()
+                            let picking = self_picker_active;
+                            if ui
+                                .add_enabled(!picking, egui::Button::new("Browse…"))
+                                .clicked()
                             {
-                                theme.background_image = path.display().to_string();
-                                changed = true;
+                                let (tx, rx) = std::sync::mpsc::channel();
+                                picker_started = Some(rx);
+                                std::thread::spawn(move || {
+                                    let _ = tx.send(
+                                        rfd::FileDialog::new()
+                                            .set_title("Choose a background image")
+                                            .add_filter(
+                                                "Images",
+                                                &["png", "jpg", "jpeg", "bmp", "webp"],
+                                            )
+                                            .pick_file(),
+                                    );
+                                });
                             }
                             if !theme.background_image.is_empty()
                                 && ui.button("Clear").clicked()
@@ -264,6 +282,25 @@ impl ThemePanel {
             });
         if close {
             self.open = false;
+        }
+        if let Some(rx) = picker_started {
+            self.picker = Some(rx);
+        }
+        // poll the off-thread dialog; keep frames coming while it's open
+        if let Some(rx) = &self.picker {
+            match rx.try_recv() {
+                Ok(Some(path)) => {
+                    theme.background_image = path.display().to_string();
+                    changed = true;
+                    self.picker = None;
+                }
+                Ok(None) => self.picker = None, // canceled
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    ui.ctx()
+                        .request_repaint_after(std::time::Duration::from_millis(200));
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.picker = None,
+            }
         }
         if changed {
             apply_style(ui.ctx(), theme); // live restyle, same frame
