@@ -11,6 +11,19 @@ authors = ["Kwuasimoto"]
 [profile.release]
 strip = true
 
+# background images decode through these even in dev builds; unoptimized PNG
+# decoding takes seconds on large images, optimized takes tens of milliseconds
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.png]
+opt-level = 3
+[profile.dev.package.fdeflate]
+opt-level = 3
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+
 [build-dependencies]
 winresource = "0.1"   # embeds assets/icon.ico into the exe
 

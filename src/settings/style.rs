@@ -87,16 +87,28 @@ pub fn paint_background(ui: &egui::Ui, theme: &Theme) {
     }
     // three slashes, not two: file://X treats X as a UNC hostname on Windows;
     // file:///X is a local path (egui_extras file_loader::convert_uri_to_path)
-    let img = egui::Image::new(format!("file:///{}", theme.background_image))
-        .tint(egui::Color32::WHITE.gamma_multiply(alpha));
-    match img.load_for_size(ui.ctx(), rect.size()) {
+    let uri = format!("file:///{}", theme.background_image);
+    let probe = egui::Image::new(uri.clone());
+    match probe.load_for_size(ui.ctx(), rect.size()) {
         Ok(egui::load::TexturePoll::Ready { texture }) => {
+            // decode is async — fade the image in when it lands instead of
+            // popping (also covers slow decodes of oversized files)
+            let fade = ui.ctx().animate_bool_with_time(
+                egui::Id::new("bg-image-fade"),
+                true,
+                0.4,
+            );
             let scale = (rect.width() / texture.size.x).max(rect.height() / texture.size.y);
             let cover = egui::Rect::from_center_size(rect.center(), texture.size * scale);
-            img.paint_at(ui, cover); // the ui's clip crops the overflow — cover-fit
+            egui::Image::new(uri)
+                .tint(egui::Color32::WHITE.gamma_multiply(alpha * fade))
+                .paint_at(ui, cover); // the ui's clip crops the overflow — cover-fit
         }
         Ok(egui::load::TexturePoll::Pending { .. }) => {
-            ui.ctx().request_repaint(); // first frame after picking: try again
+            // reset the fade while loading so the arrival always eases in
+            ui.ctx()
+                .animate_bool_with_time(egui::Id::new("bg-image-fade"), false, 0.0);
+            ui.ctx().request_repaint(); // keep frames coming until decoded
         }
         Err(_) => {} // bad path/format: the color canvas stands; drawer shows the file name
     }
