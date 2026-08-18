@@ -40,8 +40,9 @@ pub struct Theme {
     /// Optional background image path (empty = none), drawn cover-fit behind
     /// the settings content. Widget fills stay solid for readability.
     pub background_image: String,
-    /// Whole-window opacity, 0..=255 (layered-window alpha: the entire window
-    /// fades uniformly, desktop showing through). 0 = fully invisible.
+    /// Whole-window opacity (layered-window alpha: the entire window fades
+    /// uniformly, desktop showing through). Applied with a ~10% floor — a
+    /// window that persists itself invisible is a lockout, not a feature.
     pub window_opacity: u8,
     /// Windows 11 draws an accent-colored focus border around every window;
     /// off makes the window truly flush (DWMWA_BORDER_COLOR = none).

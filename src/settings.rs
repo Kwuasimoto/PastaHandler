@@ -132,7 +132,9 @@ impl eframe::App for SettingsApp {
                 crate::win32::set_system_border(w.hwnd.get(), self.draft.theme.focus_outline);
                 self.applied_outline = Some(self.draft.theme.focus_outline);
             }
-            crate::win32::set_window_alpha(w.hwnd.get(), self.draft.theme.window_opacity);
+            // floor at ~10% no matter what the file says: a stale or hand-
+            // edited 0 must never open an invisible window
+            crate::win32::set_window_alpha(w.hwnd.get(), self.draft.theme.window_opacity.max(26));
         }
 
         let theme_committed = self.theme_panel.show(ui, &mut self.draft.theme);
