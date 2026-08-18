@@ -33,8 +33,15 @@ impl ThemePanel {
     /// it runs in the compose order doesn't affect any other region's layout.
     pub fn show(&mut self, ui: &mut egui::Ui, theme: &mut Theme) -> bool {
         let ctx = ui.ctx().clone();
-        // slide: 0 = parked off-screen, 1 = fully out; skip everything once parked
-        let t = ctx.animate_bool(egui::Id::new("theme-drawer-slide"), self.open);
+        // slide: 0 = parked off-screen, 1 = fully out; skip everything once parked.
+        // egui's default animation (0.12s linear) reads as a pop at this size —
+        // a drawer wants a felt slide with an ease-out landing.
+        let t = ctx.animate_bool_with_time_and_easing(
+            egui::Id::new("theme-drawer-slide"),
+            self.open,
+            0.25,
+            egui::emath::easing::cubic_out,
+        );
         if t <= 0.0 {
             return false;
         }
@@ -53,6 +60,11 @@ impl ThemePanel {
             .inner_margin(egui::Margin::same(14));
         egui::Area::new(egui::Id::new("theme-drawer"))
             .order(egui::Order::Foreground)
+            // the sheet unmounts while parked, so every open is a "new" area to
+            // egui: kill the new-area fade (it fights the slide) and declare the
+            // size upfront (an unsized first frame paints short, then snaps)
+            .fade_in(false)
+            .default_size(egui::vec2(WIDTH, screen.height()))
             .fixed_pos(egui::pos2(screen.min.x - WIDTH * (1.0 - t), screen.min.y))
             .show(&ctx, |ui| {
                 frame.show(ui, |ui| {
