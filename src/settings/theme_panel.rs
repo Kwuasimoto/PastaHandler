@@ -381,6 +381,15 @@ impl ThemePanel {
                                     );
                                 });
                             }
+                            // the bundled sakura art, embedded in the exe —
+                            // one click, works on any install
+                            if theme.background_image != super::style::EXAMPLE_BG_URI
+                                && ui.button("Example").clicked()
+                            {
+                                theme.background_image =
+                                    super::style::EXAMPLE_BG_URI.to_owned();
+                                changed = true;
+                            }
                             if !theme.background_image.is_empty()
                                 && ui.button("Clear").clicked()
                             {

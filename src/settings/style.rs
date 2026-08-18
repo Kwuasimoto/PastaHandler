@@ -85,9 +85,7 @@ pub fn paint_background(ui: &egui::Ui, theme: &Theme) {
     if theme.background_image.is_empty() {
         return;
     }
-    // three slashes, not two: file://X treats X as a UNC hostname on Windows;
-    // file:///X is a local path (egui_extras file_loader::convert_uri_to_path)
-    let uri = format!("file:///{}", theme.background_image);
+    let uri = background_image_uri(&theme.background_image);
     let probe = egui::Image::new(uri.clone());
     match probe.load_for_size(ui.ctx(), rect.size()) {
         Ok(egui::load::TexturePoll::Ready { texture }) => {
@@ -100,8 +98,11 @@ pub fn paint_background(ui: &egui::Ui, theme: &Theme) {
             );
             let scale = (rect.width() / texture.size.x).max(rect.height() / texture.size.y);
             let cover = egui::Rect::from_center_size(rect.center(), texture.size * scale);
+            // deliberately NOT multiplied by the window opacity: the image is
+            // the wallpaper layer; opacity lights the canvas BEHIND it (its
+            // transparent regions), never the image itself
             egui::Image::new(uri)
-                .tint(egui::Color32::WHITE.gamma_multiply(alpha * fade))
+                .tint(egui::Color32::WHITE.gamma_multiply(fade))
                 .paint_at(ui, cover); // the ui's clip crops the overflow — cover-fit
         }
         Ok(egui::load::TexturePoll::Pending { .. }) => {
@@ -111,6 +112,31 @@ pub fn paint_background(ui: &egui::Ui, theme: &Theme) {
             ui.ctx().request_repaint(); // keep frames coming until decoded
         }
         Err(_) => {} // bad path/format: the color canvas stands; drawer shows the file name
+    }
+}
+
+/// The bundled example background's URI — the bytes are embedded in the exe
+/// (installs have no assets folder) and registered in `install_example_bg`.
+pub const EXAMPLE_BG_URI: &str = "bytes://example-sakura-bg.png";
+
+/// Register the embedded example background with egui's bytes loader (once,
+/// at startup) so `EXAMPLE_BG_URI` resolves on any machine.
+pub fn install_example_bg(ctx: &egui::Context) {
+    ctx.include_bytes(
+        EXAMPLE_BG_URI,
+        &include_bytes!("../../assets/example-sakura-bg.png")[..],
+    );
+}
+
+/// Config stores either a plain file path or a `bytes://` URI (the embedded
+/// example) — map it to the URI egui's loaders expect. The three slashes on
+/// the file scheme matter: `file://X` treats X as a UNC hostname on Windows;
+/// `file:///X` is a local path (egui_extras file_loader::convert_uri_to_path).
+fn background_image_uri(stored: &str) -> String {
+    if stored.starts_with("bytes://") {
+        stored.to_owned()
+    } else {
+        format!("file:///{stored}")
     }
 }
 

@@ -16,7 +16,10 @@ mod theme_panel;
 mod widgets;
 
 use snippet_table::SnippetTable;
-use style::{apply_style, install_fonts, mascot_for, mascot_smile_for, paint_background, Palette};
+use style::{
+    apply_style, install_example_bg, install_fonts, mascot_for, mascot_smile_for,
+    paint_background, Palette,
+};
 use theme_panel::ThemePanel;
 
 /// The settings process's single public door — main.rs and the resident depend
@@ -236,6 +239,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
         options,
         Box::new(move |cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx); // enables SVG assets
+            install_example_bg(&cc.egui_ctx); // embedded example background
             install_fonts(&cc.egui_ctx);
             apply_style(&cc.egui_ctx, &draft.theme);
             #[allow(unused_mut)]
