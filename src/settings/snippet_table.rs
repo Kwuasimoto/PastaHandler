@@ -76,7 +76,12 @@ impl SnippetTable {
             .show(ui, |ui| {
                 egui::Grid::new("snippets")
                     .striped(true)
-                    .num_columns(3)
+                    .num_columns(4)
+                    // egui's default min_col_width (interact_size.x = 40) silently
+                    // widens the 36px delete column, pushing every row 4px past the
+                    // right margin. Zero it: the add_sized widths are the sole
+                    // sizing authority, so rows fill the width exactly.
+                    .min_col_width(0.0)
                     .spacing([SPACING, 8.0])
                     .show(ui, |ui| {
                         ui.label("");
