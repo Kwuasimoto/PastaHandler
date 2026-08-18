@@ -79,7 +79,7 @@ type SetWindowCompositionAttributeFn =
 /// wallpaper on current builds; ACRYLICBLURBEHIND (4) has the known
 /// window-drag lag. Requires the glow renderer — wgpu presents with
 /// alpha-mode IGNORE, so its framebuffer alpha never reaches this layer.
-pub fn set_glass(hwnd: isize, on: bool) {
+pub fn set_blur(hwnd: isize, on: bool) {
     let user32: Vec<u16> = "user32.dll\0".encode_utf16().collect();
     let func: Option<SetWindowCompositionAttributeFn> = unsafe {
         let module = GetModuleHandleW(user32.as_ptr());
@@ -90,8 +90,9 @@ pub fn set_glass(hwnd: isize, on: bool) {
         return;
     };
     let mut policy = AccentPolicy {
-        // off = ACCENT_DISABLED: canvas alpha then composites on black, so
-        // lowering opacity DIMS instead of revealing the desktop
+        // off = ACCENT_DISABLED: the desktop still composites through the
+        // canvas alpha, just SHARP instead of blurred (measured: disabling
+        // the accent leaves DWM honoring the glow framebuffer alpha)
         accent_state: if on { ACCENT_ENABLE_BLURBEHIND } else { ACCENT_DISABLED },
         flags: 0,
         gradient_color: 0x0100_0000, // ABGR, near-invisible tint; canvas owns the look
@@ -104,7 +105,7 @@ pub fn set_glass(hwnd: isize, on: bool) {
     };
     let ok = unsafe { set_attribute(hwnd, &mut data) };
     crate::logging::log_event(&format!(
-        "glass {} hwnd={hwnd} ok={ok}",
+        "blur {} hwnd={hwnd} ok={ok}",
         if on { "on" } else { "off" }
     ));
 }

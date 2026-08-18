@@ -71,29 +71,17 @@ impl Palette {
 pub fn paint_background(ui: &egui::Ui, theme: &Theme) {
     let rect = ui.ctx().content_rect();
     let alpha = theme.window_opacity as f32 / 255.0;
-    // glass: real alpha stays open for DWM to fill with the desktop behind.
-    // no glass: the canvas paints OPAQUE, pre-dimmed — opacity fades the
-    // background toward black and the desktop never participates.
-    let (fill, tint) = if theme.glass {
-        (
-            rgb(theme.background).gamma_multiply(alpha),
-            egui::Color32::WHITE.gamma_multiply(alpha),
-        )
-    } else {
-        let dim = |v: u8| (v as f32 * alpha) as u8;
-        let [r, g, b] = theme.background;
-        (
-            egui::Color32::from_rgb(dim(r), dim(g), dim(b)),
-            egui::Color32::from_gray(dim(255)),
-        )
-    };
-    ui.painter().rect_filled(rect, 0, fill);
+    // the canvas's alpha stays open unconditionally — DWM fills it with the
+    // desktop behind (frosted or sharp per the Blur toggle, win32::set_blur)
+    ui.painter()
+        .rect_filled(rect, 0, rgb(theme.background).gamma_multiply(alpha));
     if theme.background_image.is_empty() {
         return;
     }
     // three slashes, not two: file://X treats X as a UNC hostname on Windows;
     // file:///X is a local path (egui_extras file_loader::convert_uri_to_path)
-    let img = egui::Image::new(format!("file:///{}", theme.background_image)).tint(tint);
+    let img = egui::Image::new(format!("file:///{}", theme.background_image))
+        .tint(egui::Color32::WHITE.gamma_multiply(alpha));
     match img.load_for_size(ui.ctx(), rect.size()) {
         Ok(egui::load::TexturePoll::Ready { texture }) => {
             let scale = (rect.width() / texture.size.x).max(rect.height() / texture.size.y);

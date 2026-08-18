@@ -47,10 +47,10 @@ pub struct Theme {
     /// Windows 11 draws an accent-colored focus border around every window;
     /// off makes the window truly flush (DWMWA_BORDER_COLOR = none).
     pub focus_outline: bool,
-    /// Frosted glass: below-100% opacity reveals the (blurred) desktop behind
-    /// the canvas. Off, the canvas dims toward black instead — the choice for
-    /// a background image that should fade, not turn translucent.
-    pub glass: bool,
+    /// Frost the see-through: on, the desktop behind the canvas is blurred
+    /// (acrylic-style); off, it shows through sharp. Transparency itself is
+    /// unconditional — opacity always reveals the desktop.
+    pub blur: bool,
 }
 
 impl Default for Theme {
@@ -66,7 +66,7 @@ impl Default for Theme {
             background_image: String::new(),
             window_opacity: 255,
             focus_outline: true,
-            glass: true,
+            blur: true,
         }
     }
 }
@@ -86,7 +86,7 @@ impl Theme {
             background_image: String::new(),
             window_opacity: 255,
             focus_outline: true,
-            glass: true,
+            blur: true,
         }
     }
 }

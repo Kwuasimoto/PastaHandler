@@ -41,8 +41,8 @@ struct SettingsApp {
     table: SnippetTable,
     /// Last focus_outline value pushed to DWM — apply-on-change, not per-frame.
     applied_outline: Option<bool>,
-    /// Last glass value pushed to the DWM accent policy, same pattern.
-    applied_glass: Option<bool>,
+    /// Last blur value pushed to the DWM accent policy, same pattern.
+    applied_blur: Option<bool>,
     /// Debug builds only: F12 toggles egui's live style editor.
     #[cfg(debug_assertions)]
     style_editor: bool,
@@ -134,14 +134,14 @@ impl eframe::App for SettingsApp {
         // Our own HWND comes from eframe — never window enumeration in-frame
         // (same-process GetWindowTextW re-enters the wndproc and deadlocks).
         let outline_dirty = self.applied_outline != Some(self.draft.theme.focus_outline);
-        let glass_dirty = self.applied_glass != Some(self.draft.theme.glass);
-        if (outline_dirty || glass_dirty)
+        let blur_dirty = self.applied_blur != Some(self.draft.theme.blur);
+        if (outline_dirty || blur_dirty)
             && let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(frame)
             && let raw_window_handle::RawWindowHandle::Win32(w) = handle.as_raw()
         {
-            if glass_dirty {
-                crate::win32::set_glass(w.hwnd.get(), self.draft.theme.glass);
-                self.applied_glass = Some(self.draft.theme.glass);
+            if blur_dirty {
+                crate::win32::set_blur(w.hwnd.get(), self.draft.theme.blur);
+                self.applied_blur = Some(self.draft.theme.blur);
             }
             if outline_dirty {
                 crate::win32::set_system_border(w.hwnd.get(), self.draft.theme.focus_outline);
@@ -252,7 +252,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
                 theme_panel,
                 table: SnippetTable::new(),
                 applied_outline: None,
-                applied_glass: None,
+                applied_blur: None,
                 #[cfg(debug_assertions)]
                 style_editor: false,
             }))
@@ -278,7 +278,7 @@ mod tests {
             theme_panel: ThemePanel::new(),
             table: SnippetTable::new(),
             applied_outline: None,
-            applied_glass: None,
+            applied_blur: None,
             #[cfg(debug_assertions)]
             style_editor: false,
         }

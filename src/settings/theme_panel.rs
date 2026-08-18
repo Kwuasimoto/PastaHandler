@@ -212,10 +212,10 @@ impl ThemePanel {
                                 }
                                 ui.end_row();
 
-                                // on: low opacity reveals the blurred desktop;
-                                // off: low opacity dims toward black instead
-                                ui.label("Glass");
-                                if toggle_switch(ui, &mut theme.glass, true, acc, kn).changed() {
+                                // frosted vs sharp see-through; transparency
+                                // itself is unconditional
+                                ui.label("Blur");
+                                if toggle_switch(ui, &mut theme.blur, true, acc, kn).changed() {
                                     changed = true; // the shell applies it on change
                                 }
                                 ui.end_row();
