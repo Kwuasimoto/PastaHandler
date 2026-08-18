@@ -84,7 +84,7 @@ impl SettingsApp {
 
 impl eframe::App for SettingsApp {
     // fully transparent surface every frame: paint_background owns the canvas,
-    // and the DWM accent policy (win32::enable_glass) composites the desktop
+    // and the DWM accent policy (win32::set_blur) composites the desktop
     // behind whatever alpha the canvas leaves open
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         [0.0, 0.0, 0.0, 0.0]
@@ -197,7 +197,7 @@ impl eframe::App for SettingsApp {
 
             if let Some(err) = &self.error {
                 ui.add_space(8.0);
-                ui.colored_label(egui::Color32::from_rgb(220, 80, 80), err);
+                ui.colored_label(palette.danger, err);
             }
 
             // footer hint — pinned to the window's bottom edge, status-bar style

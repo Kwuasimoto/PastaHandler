@@ -70,6 +70,20 @@ fn preset_card(
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// One labeled toggle line inside a settings grid; true when flipped.
+fn toggle_row(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut bool,
+    accent: egui::Color32,
+    knob: egui::Color32,
+) -> bool {
+    ui.label(label);
+    let changed = toggle_switch(ui, value, true, accent, knob).changed();
+    ui.end_row();
+    changed
+}
+
 pub struct ThemePanel {
     pub open: bool,
     /// Preset gallery expansion — collapsed shows only the first row.
@@ -261,6 +275,8 @@ impl ThemePanel {
 
                         ui.label(egui::RichText::new("BEHAVIOR").small().weak());
                         ui.add_space(2.0);
+                        let acc = rgb(theme.accent);
+                        let kn = rgb(theme.knob);
                         egui::Grid::new("theme-behavior")
                             .num_columns(2)
                             .min_col_width(96.0)
@@ -268,15 +284,8 @@ impl ThemePanel {
                             .show(ui, |ui| {
                                 // solid stripe fills float oddly on a
                                 // transparent canvas — let people opt out
-                                ui.label("Row stripes");
-                                let acc = rgb(theme.accent);
-                                let kn = rgb(theme.knob);
-                                if toggle_switch(ui, &mut theme.row_stripes, true, acc, kn)
-                                    .changed()
-                                {
-                                    changed = true;
-                                }
-                                ui.end_row();
+                                changed |=
+                                    toggle_row(ui, "Row stripes", &mut theme.row_stripes, acc, kn);
                             });
 
                         ui.add_space(8.0);
@@ -290,11 +299,7 @@ impl ThemePanel {
                             .min_col_width(96.0)
                             .spacing([12.0, 8.0])
                             .show(ui, |ui| {
-                                ui.label("Borderless");
-                                let acc = rgb(theme.accent);
-                                let kn = rgb(theme.knob);
-                                let resp = toggle_switch(ui, &mut theme.borderless, true, acc, kn);
-                                if resp.changed() {
+                                if toggle_row(ui, "Borderless", &mut theme.borderless, acc, kn) {
                                     // applies live — no restart needed
                                     ui.ctx()
                                         .send_viewport_cmd(egui::ViewportCommand::Decorations(
@@ -302,25 +307,18 @@ impl ThemePanel {
                                         ));
                                     changed = true;
                                 }
-                                ui.end_row();
-
                                 // Windows 11's accent ring around the focused
-                                // window; off = truly flush edges
-                                ui.label("Focus outline");
-                                if toggle_switch(ui, &mut theme.focus_outline, true, acc, kn)
-                                    .changed()
-                                {
-                                    changed = true; // the shell applies it on change
-                                }
-                                ui.end_row();
-
+                                // window; off = truly flush (shell applies it)
+                                changed |= toggle_row(
+                                    ui,
+                                    "Focus outline",
+                                    &mut theme.focus_outline,
+                                    acc,
+                                    kn,
+                                );
                                 // frosted vs sharp see-through; transparency
-                                // itself is unconditional
-                                ui.label("Blur");
-                                if toggle_switch(ui, &mut theme.blur, true, acc, kn).changed() {
-                                    changed = true; // the shell applies it on change
-                                }
-                                ui.end_row();
+                                // itself is unconditional (shell applies it)
+                                changed |= toggle_row(ui, "Blur", &mut theme.blur, acc, kn);
                             });
 
                         ui.add_space(8.0);

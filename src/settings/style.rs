@@ -50,6 +50,9 @@ pub struct Palette {
     pub knob: egui::Color32,
     /// Inactive-row text, ghost icons, and the resting resize grip.
     pub dim: egui::Color32,
+    /// Rejected input and destructive intent: the error label, the capture
+    /// hint, the delete hover. One red, everywhere something says "no".
+    pub danger: egui::Color32,
     /// Alternate-row shading in the snippet table (off for transparent looks).
     pub row_stripes: bool,
 }
@@ -60,6 +63,7 @@ impl Palette {
             accent: rgb(theme.accent),
             knob: rgb(theme.knob),
             dim: scale(theme.text, 0.52),
+            danger: egui::Color32::from_rgb(220, 80, 80),
             row_stripes: theme.row_stripes,
         }
     }

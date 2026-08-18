@@ -1,6 +1,7 @@
 //! Minimal hand-rolled Win32 FFI shared by both processes. Narrow by design —
-//! see COMPLIANCE.md: top-level window titles, ordinary window messages, and a
-//! named mutex for single-instancing. No process handles are opened, nothing
+//! see COMPLIANCE.md: top-level window titles, ordinary window messages, a
+//! named mutex for single-instancing, and DWM cosmetics on our own window
+//! (focus border, blur-behind accent). No process handles are opened, nothing
 //! is injected or simulated; the compliance grep stays empty.
 
 /// The settings window's title — the single source of truth. The window is

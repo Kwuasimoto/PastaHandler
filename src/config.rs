@@ -300,6 +300,22 @@ mod tests {
         let _ = std::fs::remove_file(file.path());
     }
 
+    /// Guards future palette edits: every preset must keep readable contrast
+    /// between text and background, and names must stay unique.
+    #[test]
+    fn presets_are_readable_and_uniquely_named() {
+        let luma = |c: [u8; 3]| 0.299 * c[0] as f32 + 0.587 * c[1] as f32 + 0.114 * c[2] as f32;
+        let mut names = std::collections::HashSet::new();
+        for (name, theme) in Theme::presets() {
+            assert!(names.insert(name), "duplicate preset name: {name}");
+            let delta = (luma(theme.text) - luma(theme.background)).abs();
+            assert!(
+                delta >= 120.0,
+                "preset '{name}' text/background contrast too low (luma delta {delta:.0})"
+            );
+        }
+    }
+
     #[test]
     fn read_missing_file_seeds_sample_with_header() {
         let file = temp_config("pastahandler-test-seed.toml");

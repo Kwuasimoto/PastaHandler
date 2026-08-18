@@ -137,7 +137,7 @@ impl SnippetTable {
                                 // a rejected keypress must not fail silently: the
                                 // hint takes over the prompt, right under their eyes
                                 let (prompt, color) = match self.capture_hint {
-                                    Some(hint) => (hint, egui::Color32::from_rgb(220, 80, 80)),
+                                    Some(hint) => (hint, palette.danger),
                                     None => ("press keys…", palette.accent),
                                 };
                                 let resp = hotkey_chip(
@@ -203,7 +203,7 @@ impl SnippetTable {
                             // ghost icon button, the production convention for row
                             // utilities: no frame at rest, muted icon; red when aimed at
                             let trash_tint = if self.hovered_delete == Some(i) {
-                                egui::Color32::from_rgb(224, 82, 82)
+                                palette.danger
                             } else {
                                 palette.dim
                             };
