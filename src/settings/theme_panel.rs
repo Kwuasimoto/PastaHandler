@@ -4,7 +4,7 @@
 //! rather than a layout panel (pushing the fixed-column table aside smooshes
 //! it at the small default window size). Overlaying costs the content nothing.
 //! Owns its one piece of cross-frame state: whether it is open. Future ask
-//! "new theme knob" lands here (plus the Theme field in config.rs, which is
+//! "new theme knob" lands here (plus the field on Theme in theme.rs, which is
 //! domain and unavoidable).
 
 use eframe::egui;
@@ -12,7 +12,7 @@ use eframe::egui;
 use super::chrome::{caption_button, CaptionIcon};
 use super::style::{apply_style, rgb};
 use super::widgets::toggle_switch;
-use crate::config::{PresetPalette, Theme, PRESETS};
+use crate::theme::{PresetPalette, Theme, PRESETS};
 
 /// Outer sheet width, frame margins included. Sized to its own content only —
 /// overlaying means the table's layout never depends on this number.

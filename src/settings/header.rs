@@ -7,7 +7,7 @@ use eframe::egui;
 
 use super::chrome::{caption_button, CaptionIcon};
 use super::style::{on_color, rgb};
-use crate::config::Theme;
+use crate::theme::Theme;
 
 #[must_use]
 pub struct HeaderOutput {

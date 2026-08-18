@@ -7,6 +7,7 @@ pub mod hotkeys;
 pub mod logging;
 pub mod resident;
 pub mod settings;
+pub mod theme;
 pub mod tray;
 pub mod win32;
 

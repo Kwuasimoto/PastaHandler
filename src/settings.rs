@@ -279,7 +279,8 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Snippet, Theme};
+    use crate::config::Snippet;
+    use crate::theme::Theme;
 
     fn snippet(text: &str, hotkey: &str, active: bool) -> Snippet {
         Snippet { text: text.into(), hotkey: hotkey.into(), active }

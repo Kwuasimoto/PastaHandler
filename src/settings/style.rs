@@ -4,7 +4,7 @@
 
 use eframe::egui;
 
-use crate::config::Theme;
+use crate::theme::Theme;
 
 pub fn rgb(c: [u8; 3]) -> egui::Color32 {
     egui::Color32::from_rgb(c[0], c[1], c[2])
