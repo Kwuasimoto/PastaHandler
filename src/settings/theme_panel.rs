@@ -18,6 +18,58 @@ use crate::config::Theme;
 /// overlaying means the table's layout never depends on this number.
 const WIDTH: f32 = 250.0;
 
+/// A preset as its own preview: card background/border/text/radius all come
+/// from the PRESET (not the active theme), with an accent chip carrying a
+/// knob dot. The active palette gets an accent selection ring.
+fn preset_card(
+    ui: &mut egui::Ui,
+    name: &str,
+    preset: &Theme,
+    current: &Theme,
+    width: f32,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 40.0), egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let selected = current.accent == preset.accent
+            && current.background == preset.background
+            && current.text == preset.text
+            && current.border == preset.border
+            && current.knob == preset.knob
+            && current.corner_radius == preset.corner_radius;
+        let radius = egui::CornerRadius::same(preset.corner_radius.min(12));
+        ui.painter().rect_filled(rect, radius, rgb(preset.background));
+        let stroke = if selected {
+            egui::Stroke::new(2.0, rgb(preset.accent))
+        } else if response.hovered() {
+            egui::Stroke::new(1.5, rgb(preset.accent).linear_multiply(0.75))
+        } else {
+            egui::Stroke::new(1.0, rgb(preset.border))
+        };
+        ui.painter()
+            .rect_stroke(rect, radius, stroke, egui::StrokeKind::Inside);
+        // accent chip with the knob as a dot riding on it
+        let chip = egui::Rect::from_center_size(
+            egui::pos2(rect.left() + 17.0, rect.center().y),
+            egui::vec2(14.0, 14.0),
+        );
+        ui.painter()
+            .rect_filled(chip, egui::CornerRadius::same(4), rgb(preset.accent));
+        ui.painter().circle_filled(
+            egui::pos2(chip.right() - 3.5, chip.bottom() - 3.5),
+            2.5,
+            rgb(preset.knob),
+        );
+        ui.painter().text(
+            egui::pos2(rect.left() + 30.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            name,
+            egui::FontId::proportional(13.0),
+            rgb(preset.text),
+        );
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 pub struct ThemePanel {
     pub open: bool,
     /// In-flight native file dialog. rfd's pick_file BLOCKS its thread — run
@@ -107,21 +159,29 @@ impl ThemePanel {
                         ui.set_width(WIDTH - 16.0 - 12.0);
                         ui.label(egui::RichText::new("PRESETS").small().weak());
                         ui.add_space(2.0);
-                        ui.horizontal_wrapped(|ui| {
-                            for (name, preset) in Theme::presets() {
-                                if ui.button(name).clicked() {
-                                    // presets are PALETTES: colors + radius only;
-                                    // window behavior stays exactly as you set it
-                                    theme.accent = preset.accent;
-                                    theme.background = preset.background;
-                                    theme.text = preset.text;
-                                    theme.border = preset.border;
-                                    theme.knob = preset.knob;
-                                    theme.corner_radius = preset.corner_radius;
-                                    changed = true;
+                        // two-column grid of live preview cards — each card IS
+                        // its theme in miniature (bg, border, accent chip, text
+                        // color, corner radius), so you read it before you click
+                        let card_w = (ui.available_width() - 8.0) / 2.0;
+                        for pair in Theme::presets().chunks(2) {
+                            ui.horizontal(|ui| {
+                                for (name, preset) in pair {
+                                    if preset_card(ui, name, preset, theme, card_w).clicked()
+                                    {
+                                        // presets are PALETTES: colors + radius
+                                        // only; window behavior stays yours
+                                        theme.accent = preset.accent;
+                                        theme.background = preset.background;
+                                        theme.text = preset.text;
+                                        theme.border = preset.border;
+                                        theme.knob = preset.knob;
+                                        theme.corner_radius = preset.corner_radius;
+                                        changed = true;
+                                    }
                                 }
-                            }
-                        });
+                            });
+                            ui.add_space(6.0);
+                        }
 
                         ui.add_space(8.0);
                         ui.separator();
