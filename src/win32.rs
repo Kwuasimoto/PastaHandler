@@ -62,6 +62,7 @@ struct WindowCompositionAttribData {
 }
 
 const WCA_ACCENT_POLICY: u32 = 19;
+const ACCENT_DISABLED: u32 = 0;
 const ACCENT_ENABLE_BLURBEHIND: u32 = 3;
 
 type SetWindowCompositionAttributeFn =
@@ -78,7 +79,7 @@ type SetWindowCompositionAttributeFn =
 /// wallpaper on current builds; ACRYLICBLURBEHIND (4) has the known
 /// window-drag lag. Requires the glow renderer — wgpu presents with
 /// alpha-mode IGNORE, so its framebuffer alpha never reaches this layer.
-pub fn enable_glass(hwnd: isize) {
+pub fn set_glass(hwnd: isize, on: bool) {
     let user32: Vec<u16> = "user32.dll\0".encode_utf16().collect();
     let func: Option<SetWindowCompositionAttributeFn> = unsafe {
         let module = GetModuleHandleW(user32.as_ptr());
@@ -89,12 +90,11 @@ pub fn enable_glass(hwnd: isize) {
         return;
     };
     let mut policy = AccentPolicy {
-        accent_state: ACCENT_ENABLE_BLURBEHIND,
+        // off = ACCENT_DISABLED: canvas alpha then composites on black, so
+        // lowering opacity DIMS instead of revealing the desktop
+        accent_state: if on { ACCENT_ENABLE_BLURBEHIND } else { ACCENT_DISABLED },
         flags: 0,
-        // ABGR, alpha 1: a zero-alpha gradient makes the accent layer render
-        // its own gray haze; a near-invisible tint collapses it into true
-        // desktop passthrough (the folklore-documented quirk)
-        gradient_color: 0x0100_0000,
+        gradient_color: 0x0100_0000, // ABGR, near-invisible tint; canvas owns the look
         animation_id: 0,
     };
     let mut data = WindowCompositionAttribData {
@@ -103,7 +103,10 @@ pub fn enable_glass(hwnd: isize) {
         size: size_of::<AccentPolicy>(),
     };
     let ok = unsafe { set_attribute(hwnd, &mut data) };
-    crate::logging::log_event(&format!("glass accent hwnd={hwnd} ok={ok}"));
+    crate::logging::log_event(&format!(
+        "glass {} hwnd={hwnd} ok={ok}",
+        if on { "on" } else { "off" }
+    ));
 }
 
 const DWMWA_BORDER_COLOR: u32 = 34;

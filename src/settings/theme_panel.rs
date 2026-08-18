@@ -211,6 +211,14 @@ impl ThemePanel {
                                     changed = true; // the shell applies it on change
                                 }
                                 ui.end_row();
+
+                                // on: low opacity reveals the blurred desktop;
+                                // off: low opacity dims toward black instead
+                                ui.label("Glass");
+                                if toggle_switch(ui, &mut theme.glass, true, acc, kn).changed() {
+                                    changed = true; // the shell applies it on change
+                                }
+                                ui.end_row();
                             });
 
                         ui.add_space(8.0);

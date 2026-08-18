@@ -41,6 +41,8 @@ struct SettingsApp {
     table: SnippetTable,
     /// Last focus_outline value pushed to DWM — apply-on-change, not per-frame.
     applied_outline: Option<bool>,
+    /// Last glass value pushed to the DWM accent policy, same pattern.
+    applied_glass: Option<bool>,
     /// Debug builds only: F12 toggles egui's live style editor.
     #[cfg(debug_assertions)]
     style_editor: bool,
@@ -128,20 +130,23 @@ impl eframe::App for SettingsApp {
         // opacity — everything after paints (solid) on top of it
         paint_background(ui, &self.draft.theme);
 
-        // window-level Win32 state follows the theme. Our own HWND comes from
-        // eframe — never window enumeration in-frame (same-process
-        // GetWindowTextW re-enters the wndproc and deadlocks).
-        if self.applied_outline != Some(self.draft.theme.focus_outline)
+        // window-level Win32 state follows the theme; applied on change only.
+        // Our own HWND comes from eframe — never window enumeration in-frame
+        // (same-process GetWindowTextW re-enters the wndproc and deadlocks).
+        let outline_dirty = self.applied_outline != Some(self.draft.theme.focus_outline);
+        let glass_dirty = self.applied_glass != Some(self.draft.theme.glass);
+        if (outline_dirty || glass_dirty)
             && let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(frame)
             && let raw_window_handle::RawWindowHandle::Win32(w) = handle.as_raw()
         {
-            if self.applied_outline.is_none() {
-                // first frame only: the DWM accent policy that makes the
-                // canvas's per-pixel alpha composite against the desktop
-                crate::win32::enable_glass(w.hwnd.get());
+            if glass_dirty {
+                crate::win32::set_glass(w.hwnd.get(), self.draft.theme.glass);
+                self.applied_glass = Some(self.draft.theme.glass);
             }
-            crate::win32::set_system_border(w.hwnd.get(), self.draft.theme.focus_outline);
-            self.applied_outline = Some(self.draft.theme.focus_outline);
+            if outline_dirty {
+                crate::win32::set_system_border(w.hwnd.get(), self.draft.theme.focus_outline);
+                self.applied_outline = Some(self.draft.theme.focus_outline);
+            }
         }
 
         let theme_committed = self.theme_panel.show(ui, &mut self.draft.theme);
@@ -247,6 +252,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
                 theme_panel,
                 table: SnippetTable::new(),
                 applied_outline: None,
+                applied_glass: None,
                 #[cfg(debug_assertions)]
                 style_editor: false,
             }))
@@ -272,6 +278,7 @@ mod tests {
             theme_panel: ThemePanel::new(),
             table: SnippetTable::new(),
             applied_outline: None,
+            applied_glass: None,
             #[cfg(debug_assertions)]
             style_editor: false,
         }
