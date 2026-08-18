@@ -16,7 +16,7 @@ mod theme_window;
 mod widgets;
 
 use snippet_table::SnippetTable;
-use style::{apply_style, install_fonts, mascot_for, Palette};
+use style::{apply_style, install_fonts, mascot_for, mascot_smile_for, Palette};
 use theme_window::ThemeWindow;
 
 /// The settings process's single public door — main.rs and the resident depend
@@ -116,7 +116,12 @@ impl eframe::App for SettingsApp {
         egui::CentralPanel::default().frame(panel_frame).show(ui, |ui| {
             let mascot = mascot_for(&self.draft.theme);
 
-            let header_out = header::show(ui, &self.draft.theme, mascot.clone());
+            let header_out = header::show(
+                ui,
+                &self.draft.theme,
+                mascot.clone(),
+                mascot_smile_for(&self.draft.theme),
+            );
             if header_out.add_snippet {
                 self.draft.snippets.push(crate::config::Snippet {
                     text: String::new(),

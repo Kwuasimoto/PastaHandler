@@ -73,6 +73,16 @@ pub fn mascot_for(theme: &Theme) -> egui::ImageSource<'static> {
     }
 }
 
+/// The hover face: same ink as `mascot_for`, mouth open in a smile, blushing.
+/// The header swaps it in while the pointer rests on the mascot.
+pub fn mascot_smile_for(theme: &Theme) -> egui::ImageSource<'static> {
+    if luma3(theme.background) > 128.0 {
+        egui::include_image!("../../assets/icon-line-dark-smile.svg")
+    } else {
+        egui::include_image!("../../assets/icon-line-light-smile.svg")
+    }
+}
+
 /// Widget styling derived entirely from the curated theme: two colors and a
 /// radius in, every shade out — so any user combination stays cohesive.
 pub fn apply_style(ctx: &egui::Context, theme: &Theme) {

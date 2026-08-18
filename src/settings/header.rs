@@ -18,7 +18,12 @@ pub struct HeaderOutput {
     pub toggle_theme: bool,
 }
 
-pub fn show(ui: &mut egui::Ui, theme: &Theme, mascot: egui::ImageSource<'static>) -> HeaderOutput {
+pub fn show(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    mascot: egui::ImageSource<'static>,
+    mascot_smile: egui::ImageSource<'static>,
+) -> HeaderOutput {
     let mut out = HeaderOutput { add_snippet: false, toggle_theme: false };
 
     // ONE deck: mascot left (+ small window title when chromeless), actions
@@ -47,7 +52,11 @@ pub fn show(ui: &mut egui::Ui, theme: &Theme, mascot: egui::ImageSource<'static>
     }
 
     ui.horizontal(|ui| {
-        ui.add(egui::Image::new(mascot).fit_to_exact_size(egui::vec2(63.0, 52.0)));
+        // hover Easter egg: hit-test the rect BEFORE painting so the smile
+        // appears the same frame the pointer arrives — no stored state, no lag
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(63.0, 52.0), egui::Sense::hover());
+        let face = if ui.rect_contains_pointer(rect) { mascot_smile } else { mascot };
+        egui::Image::new(face).paint_at(ui, rect);
         if theme.borderless {
             // stands in for the OS title bar text that decorations provide
             ui.add_space(4.0);
