@@ -56,7 +56,7 @@ const DWMWA_COLOR_NONE: u32 = 0xFFFF_FFFE;
 /// mid-frame deadlocks on that re-entrancy — the white "Not Responding" hang.
 pub fn set_system_border(hwnd: isize, show: bool) {
     let color: u32 = if show { DWMWA_COLOR_DEFAULT } else { DWMWA_COLOR_NONE };
-    unsafe {
+    let hr = unsafe {
         DwmSetWindowAttribute(
             hwnd,
             DWMWA_BORDER_COLOR,
@@ -64,6 +64,9 @@ pub fn set_system_border(hwnd: isize, show: bool) {
             size_of::<u32>() as u32,
         )
     };
+    // fires once per toggle, not per frame — cheap, and DWM failures are
+    // otherwise invisible (the attribute cannot be read back)
+    crate::logging::log_event(&format!("focus outline {} hwnd={hwnd} hr={hr:#x}", if show { "on" } else { "off" }));
 }
 
 unsafe extern "system" fn collect_settings_windows(hwnd: isize, lparam: isize) -> i32 {

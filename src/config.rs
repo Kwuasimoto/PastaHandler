@@ -40,8 +40,9 @@ pub struct Theme {
     /// Optional background image path (empty = none), drawn cover-fit behind
     /// the settings content. Widget fills stay solid for readability.
     pub background_image: String,
-    /// Settings-window opacity, 77..=255 (~30%..100%). Below 255 the canvas
-    /// turns to glass — the desktop shows through.
+    /// Settings-window canvas opacity, 0..=255. Below 255 the canvas turns to
+    /// glass; at 0 it disappears entirely and the solid widgets float on the
+    /// desktop.
     pub window_opacity: u8,
     /// Windows 11 draws an accent-colored focus border around every window;
     /// off makes the window truly flush (DWMWA_BORDER_COLOR = none).
