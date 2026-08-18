@@ -90,8 +90,11 @@ impl ThemePanel {
                     });
                     ui.add_space(6.0);
 
-                    // short main window => theme sections scroll into reach
-                    egui::ScrollArea::vertical().show(ui, |ui| {
+                    // short main window => theme sections scroll into reach.
+                    // auto_shrink OFF horizontally: the scroll lane fills the
+                    // sheet so the bar pins to the edge — otherwise it shrinks
+                    // to hug the content and rides along with any padding.
+                    egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
                         // 12px: 8 of breathing room + 4 so the floating bar can
                         // fatten on hover without overlapping the content
                         ui.set_width(WIDTH - 16.0 - 12.0);
