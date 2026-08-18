@@ -4,7 +4,7 @@
 
 use eframe::egui;
 
-use crate::theme::Theme;
+use crate::theme::{MascotStyle, Theme};
 
 pub fn rgb(c: [u8; 3]) -> egui::Color32 {
     egui::Color32::from_rgb(c[0], c[1], c[2])
@@ -140,24 +140,36 @@ fn background_image_uri(stored: &str) -> String {
     }
 }
 
-/// The mascot adapts to the theme: dark ink on light backgrounds, light ink
-/// on dark. Computed after the theme drawer each frame, so a background edit
-/// restyles the mascot the same frame.
+/// The theme's `mascot` choice resolved to concrete artwork: `Auto` picks ink
+/// by background luminance (dark ink on light, light ink on dark). Computed
+/// after the theme drawer each frame, so edits restyle it the same frame.
+fn resolved_mascot(theme: &Theme) -> MascotStyle {
+    match theme.mascot {
+        MascotStyle::Auto if luma3(theme.background) > 128.0 => MascotStyle::Dark,
+        MascotStyle::Auto => MascotStyle::Light,
+        chosen => chosen,
+    }
+}
+
 pub fn mascot_for(theme: &Theme) -> egui::ImageSource<'static> {
-    if luma3(theme.background) > 128.0 {
-        egui::include_image!("../../assets/icon-line-dark.svg")
-    } else {
-        egui::include_image!("../../assets/icon-line-light.svg")
+    match resolved_mascot(theme) {
+        MascotStyle::Dark => egui::include_image!("../../assets/icon-line-dark.svg"),
+        MascotStyle::Light => egui::include_image!("../../assets/icon-line-light.svg"),
+        MascotStyle::Filled => egui::include_image!("../../assets/icon.svg"),
+        MascotStyle::Auto => unreachable!("resolved_mascot never returns Auto"),
     }
 }
 
 /// The hover face: same ink as `mascot_for`, mouth open in a smile, blushing.
-/// The header swaps it in while the pointer rests on the mascot.
+/// The header swaps it in while the pointer rests on the mascot. The filled
+/// bowl has no smile variant (its mouth is baked into compound color paths),
+/// so it keeps its face — the Easter egg rests while Filled is selected.
 pub fn mascot_smile_for(theme: &Theme) -> egui::ImageSource<'static> {
-    if luma3(theme.background) > 128.0 {
-        egui::include_image!("../../assets/icon-line-dark-smile.svg")
-    } else {
-        egui::include_image!("../../assets/icon-line-light-smile.svg")
+    match resolved_mascot(theme) {
+        MascotStyle::Dark => egui::include_image!("../../assets/icon-line-dark-smile.svg"),
+        MascotStyle::Light => egui::include_image!("../../assets/icon-line-light-smile.svg"),
+        MascotStyle::Filled => egui::include_image!("../../assets/icon.svg"),
+        MascotStyle::Auto => unreachable!("resolved_mascot never returns Auto"),
     }
 }
 

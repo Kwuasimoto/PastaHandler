@@ -38,6 +38,21 @@ pub struct Theme {
     /// Alternate-row shading in the snippet table. Solid fills read well on a
     /// solid canvas and like floating blocks on a transparent one.
     pub row_stripes: bool,
+    /// Which bowl face the header and empty state wear.
+    pub mascot: MascotStyle,
+}
+
+/// The mascot artwork variant. `Auto` picks ink by background luminance; the
+/// rest override it. `Filled` is the color-traced bowl — it has no smile
+/// variant, so the hover Easter egg rests while it's selected.
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MascotStyle {
+    #[default]
+    Auto,
+    Dark,
+    Light,
+    Filled,
 }
 
 impl Default for Theme {
@@ -56,6 +71,7 @@ impl Default for Theme {
             focus_outline: true,
             blur: true,
             row_stripes: true,
+            mascot: MascotStyle::Auto,
         }
     }
 }

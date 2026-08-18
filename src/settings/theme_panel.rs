@@ -12,7 +12,7 @@ use eframe::egui;
 use super::chrome::{caption_button, CaptionIcon};
 use super::style::{apply_style, rgb};
 use super::widgets::toggle_switch;
-use crate::theme::{PresetPalette, Theme, PRESETS};
+use crate::theme::{MascotStyle, PresetPalette, Theme, PRESETS};
 
 /// Outer sheet width, frame margins included. Sized to its own content only —
 /// overlaying means the table's layout never depends on this number.
@@ -284,6 +284,33 @@ impl ThemePanel {
                                 // transparent canvas — let people opt out
                                 changed |=
                                     toggle_row(ui, "Row stripes", &mut theme.row_stripes, acc, kn);
+
+                                ui.label("Mascot");
+                                let label = |m: MascotStyle| match m {
+                                    MascotStyle::Auto => "Auto",
+                                    MascotStyle::Dark => "Dark ink",
+                                    MascotStyle::Light => "Light ink",
+                                    MascotStyle::Filled => "Filled",
+                                };
+                                egui::ComboBox::from_id_salt("mascot-style")
+                                    .selected_text(label(theme.mascot))
+                                    .show_ui(ui, |ui| {
+                                        for style in [
+                                            MascotStyle::Auto,
+                                            MascotStyle::Dark,
+                                            MascotStyle::Light,
+                                            MascotStyle::Filled,
+                                        ] {
+                                            changed |= ui
+                                                .selectable_value(
+                                                    &mut theme.mascot,
+                                                    style,
+                                                    label(style),
+                                                )
+                                                .changed();
+                                        }
+                                    });
+                                ui.end_row();
                             });
 
                         ui.add_space(8.0);
