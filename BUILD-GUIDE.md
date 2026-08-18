@@ -7,45 +7,43 @@ segments live in git history now. Companion doc: [COMPLIANCE.md](COMPLIANCE.md) 
 `SetWindowsHookEx`, no `SendInput`/`keybd_event`, no `OpenProcess`/`ReadProcessMemory`, no
 input-simulation crates, no auto-paste. Ever.
 
-## Where the project stands (verified 2026-08)
+## Where the project stands (v0.1.0 shipped · updated 2026-08-18)
 
 **Architecture (immovable): two processes, one exe.**
 
 - **Resident** (`pastahandler.exe`) — tao loop + hotkeys + tray + clipboard. No window, no GPU
-  context, 1 s `WaitUntil` heartbeat, ~0% idle CPU.
-- **Settings** (`pastahandler.exe --settings`) — currently opens Notepad; becomes the eframe UI in
-  the next segment. Edits the TOML; the resident notices the mtime change and re-registers live.
+  context; event-driven wakes (proxy user events) plus a 1 s heartbeat for config reload; ~0% idle.
+- **Settings** (`pastahandler.exe --settings`) — the eframe/egui window: snippet table with hotkey
+  capture and active toggles, theme editor (Sakura preset, borderless mode with custom chrome),
+  auto-save with conflict rollback. Edits the TOML; the resident reloads live on the mtime change.
 
-**Module map (all compile clean, clippy silent):**
+**Module map (all compile clean, clippy silent, 14 unit tests):**
 
 | File | Owns |
 |---|---|
 | `main.rs` | dispatch only: `--settings` → `settings::run`, else `resident::run` |
-| `resident.rs` | the resident process: event loop, heartbeat reload, hotkey/menu handling |
-| `settings.rs` | `run(ConfigFile)` — Notepad stub, replaced by eframe next segment (same signature) |
-| `config.rs` | `ConfigFile` (read / atomic write / `mtime()`), `Config`, `Snippet`, sample seeding |
-| `hotkeys.rs` | `Hotkeys` with idempotent 3-pass `register_all` (validate → unregister → register) |
+| `resident.rs` | the resident process: event loop, proxy-wake events, heartbeat reload |
+| `settings.rs` | composition shell + the `commit()` save path (validate → write → rollback) |
+| `settings/…` | UI regions: `style`, `chrome`, `header`, `theme_window`, `snippet_table`, `widgets` |
+| `config.rs` | `ConfigFile` (read / atomic write / `mtime()`), `Config`/`Snippet`/`Theme`, seeding |
+| `hotkeys.rs` | idempotent 3-pass `register_all`; `parse_all` shared with the settings UI |
 | `clipboard.rs` | `ClipboardManager` with 3×/50 ms retry |
-| `tray.rs` | `Tray`: embedded farfalle icon (`assets/icon.png`, source `assets/icon.svg`), menu, ids |
+| `tray.rs` | `Tray`: embedded noodle-bowl icon, menu, ids |
+| `logging.rs` | best-effort event log next to config.toml (the windowless resident's voice) |
 | `error.rs` | `AppError` + `From` impls + `Display`; `Result<T>` alias |
 
-**Already proven by test:** startup rejects a bad config with a readable error (exit 1, no panic);
-a corrupt save *while running* logs `hotkey re-register failed: …` and keeps the old hotkeys live;
-a good save reloads silently without restart. Clipboard contents survive app exit.
+**Shipped:** v0.1.0 GitHub release with the per-user Inno installer and evergreen download link.
+Since that tag: the theme system, borderless chrome, the component refactor, the keybind/clipboard
+audit (tests + event log), and the mascot's hover Easter egg.
 
-**Status update (night shift, 2026-08-16):** Segment 4 is **implemented and machine-verified** —
-UI polish (sized fields, hints, subtitle), commit-and-write auto-save, shared validation via
-`hotkeys::parse_all` (unit-tested ×3), config round-trip tests (×2), clippy silent,
-`windows_subsystem` enabled, Notepad stub deleted. Auto-save proven end-to-end with synthetic
-input: typed into the real window, tabbed away, watched `label = "NightShift"` land in the TOML.
-
-- [x] `#![windows_subsystem = "windows"]` enabled (comment out for `println!` debugging).
-- [x] Checkpoint commit.
-- [ ] **The one human-required test:** hotkey → `Ctrl+V` pastes (machine can't press your keys in
-  good conscience); plus the full loop — tray → Open Settings → edit → paste reflects the edit
-  within a second → Quit. Then straight to Segment 5.
+**Remaining work:** CI release workflow + SignPath Foundation code signing. Everything else lives
+in the v2 parking lot at the bottom.
 
 ---
+
+> **Historical teaching material from here down.** Segments 4–5 are the guide as it was walked —
+> both are complete and shipped (see git log). The spoilers stay as the repetition-learning record;
+> where a detail has since evolved (e.g. `Snippet` lost its `label`, gained `active`), the code wins.
 
 ## Segment 4 — Settings UI (eframe) · 2–3 evenings
 
@@ -403,8 +401,8 @@ grep -rnE "SendInput|keybd_event|SetWindowsHookEx|OpenProcess|ReadProcessMemory|
 
 ## v2 parking lot (write ideas here, don't build them)
 
-Code signing · exe `.ico` if skipped · friendlier validation messages · single-instance guards
-(resident named-mutex; settings window focus-instead-of-second) · `notify` crate over mtime
-polling · import/export · log file next to config.toml (reload failures are invisible once the
-console is gone — first real v2 item) · `thiserror` migration · cross-platform · **never**:
-auto-paste.
+Friendlier validation messages · single-instance guards (resident named-mutex; settings window
+focus-instead-of-second) · `notify` crate over mtime polling · import/export · `thiserror`
+migration · cross-platform · **never**: auto-paste.
+(Graduated to done: code signing → in progress via SignPath; log file next to config.toml →
+shipped in the audit pass.)

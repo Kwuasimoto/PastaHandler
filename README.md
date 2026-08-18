@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.svg" width="96" alt="PastaHandler — a dapper little farfalle">
+  <img src="assets/icon.svg" width="96" alt="PastaHandler — a happy little bowl of noodles">
 </p>
 
 <h1 align="center">PastaHandler</h1>
@@ -28,7 +28,7 @@ After install you'll find two entries in the Start menu:
 
 ## Using it
 
-1. Open **PastaHandler Settings** (or click the tray farfalle → Open Settings).
+1. Open **PastaHandler Settings** (or click the tray bowl → Open Settings).
 2. **Add snippet** → type your text → click the hotkey button → **press your combo** (e.g. <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>).
 3. The row lights up — the snippet is live. Edits save automatically.
 4. Anywhere in Windows: press your combo, then <kbd>Ctrl</kbd>+<kbd>V</kbd>.
@@ -36,6 +36,13 @@ After install you'll find two entries in the Start menu:
 Extras: the toggle parks a snippet without deleting it; two snippets may share a hotkey if only
 one is active (alternate texts you switch between); the config is a hand-editable TOML at
 `%APPDATA%\pastahandler\config.toml`.
+
+## Make it yours
+
+The swatch button in the header opens the theme editor: five colors and a corner radius — every
+other shade in the UI is derived from those, so any combination stays cohesive. Two presets ship
+(the default dark and **Sakura**), and a **borderless mode** swaps the OS window frame for the
+app's own title bar. Theme edits apply live and save automatically, like everything else.
 
 ## Fair-play note (League of Legends and other games)
 
