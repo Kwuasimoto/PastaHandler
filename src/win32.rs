@@ -43,6 +43,36 @@ unsafe extern "system" {
     ) -> i32;
 }
 
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn GetWindowLongPtrW(hwnd: isize, index: i32) -> isize;
+    fn SetWindowLongPtrW(hwnd: isize, index: i32, value: isize) -> isize;
+    fn SetLayeredWindowAttributes(hwnd: isize, color_key: u32, alpha: u8, flags: u32) -> i32;
+}
+
+const GWL_EXSTYLE: i32 = -20;
+const WS_EX_LAYERED: isize = 0x0008_0000;
+const LWA_ALPHA: u32 = 0x2;
+
+/// Whole-window opacity via the layered-window alpha — DWM fades the entire
+/// window uniformly, so the desktop genuinely shows through. This is the
+/// approach that works regardless of renderer; per-pixel framebuffer alpha
+/// (solid widgets on a clear canvas) is not honored by the swapchain
+/// compositing on this stack — it renders on black.
+///
+/// Called EVERY frame, self-healing: winit rebuilds the extended style from
+/// its own flag cache on window events, wiping foreign bits — so we re-add
+/// WS_EX_LAYERED whenever it has gone missing. The check is one cheap call.
+pub fn set_window_alpha(hwnd: isize, alpha: u8) {
+    unsafe {
+        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        if ex & WS_EX_LAYERED == 0 {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED);
+        }
+        SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
+    }
+}
+
 const DWMWA_BORDER_COLOR: u32 = 34;
 const DWMWA_COLOR_DEFAULT: u32 = 0xFFFF_FFFF;
 const DWMWA_COLOR_NONE: u32 = 0xFFFF_FFFE;

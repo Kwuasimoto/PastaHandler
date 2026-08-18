@@ -81,12 +81,6 @@ impl SettingsApp {
 }
 
 impl eframe::App for SettingsApp {
-    // fully transparent surface every frame — paint_background owns the canvas,
-    // and any opacity below 100% lets the desktop show through it
-    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        [0.0, 0.0, 0.0, 0.0]
-    }
-
     // eframe 0.36: the trait method is `ui` (not the older `update`), and panels
     // are shown inside the provided `Ui`, not from a Context.
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
@@ -123,19 +117,22 @@ impl eframe::App for SettingsApp {
             }
         }
 
-        // the canvas first: color at the chosen opacity + optional image —
-        // everything after paints on top of it
+        // the canvas first: theme color + optional image — everything after
+        // paints on top of it (window opacity is layered alpha, not paint)
         paint_background(ui, &self.draft.theme);
 
-        // DWM focus border follows the theme; idempotent (startup + toggles).
-        // Our own HWND comes from eframe — never window enumeration in-frame
-        // (same-process GetWindowTextW re-enters the wndproc and deadlocks).
-        if self.applied_outline != Some(self.draft.theme.focus_outline)
-            && let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(frame)
+        // window-level Win32 state follows the theme. Our own HWND comes from
+        // eframe — never window enumeration in-frame (same-process
+        // GetWindowTextW re-enters the wndproc and deadlocks). The alpha is
+        // reasserted every frame because winit's style refreshes wipe it.
+        if let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(frame)
             && let raw_window_handle::RawWindowHandle::Win32(w) = handle.as_raw()
         {
-            crate::win32::set_system_border(w.hwnd.get(), self.draft.theme.focus_outline);
-            self.applied_outline = Some(self.draft.theme.focus_outline);
+            if self.applied_outline != Some(self.draft.theme.focus_outline) {
+                crate::win32::set_system_border(w.hwnd.get(), self.draft.theme.focus_outline);
+                self.applied_outline = Some(self.draft.theme.focus_outline);
+            }
+            crate::win32::set_window_alpha(w.hwnd.get(), self.draft.theme.window_opacity);
         }
 
         let theme_committed = self.theme_panel.show(ui, &mut self.draft.theme);
@@ -212,8 +209,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
             .with_inner_size([640.0, 400.0])
             .with_min_inner_size([560.0, 300.0])
             .with_max_inner_size([1000.0, 800.0])
-            .with_decorations(!draft.theme.borderless)
-            .with_transparent(true), // creation-time only — the opacity slider needs it ready
+            .with_decorations(!draft.theme.borderless),
         ..Default::default()
     };
     eframe::run_native(

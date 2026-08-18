@@ -62,24 +62,20 @@ impl Palette {
     }
 }
 
-/// Paint the window canvas: the theme background at the chosen opacity, then
-/// the optional background image cover-fitted over it (scaled to fill,
-/// centered, cropped at the edges — never stretched). Runs before every other
-/// region; the central panel's own fill is transparent so this shows through.
-/// Widget fills stay solid — the image lives in the canvas, text stays
-/// readable.
+/// Paint the window canvas: the theme background, then the optional background
+/// image cover-fitted over it (scaled to fill, centered, cropped at the edges
+/// — never stretched). Runs before every other region; the central panel's own
+/// fill is transparent so this shows through. Window opacity is NOT applied
+/// here — it is whole-window layered alpha (win32::set_window_alpha).
 pub fn paint_background(ui: &egui::Ui, theme: &Theme) {
     let rect = ui.ctx().content_rect();
-    let alpha = theme.window_opacity as f32 / 255.0;
-    ui.painter()
-        .rect_filled(rect, 0, rgb(theme.background).gamma_multiply(alpha));
+    ui.painter().rect_filled(rect, 0, rgb(theme.background));
     if theme.background_image.is_empty() {
         return;
     }
     // three slashes, not two: file://X treats X as a UNC hostname on Windows;
     // file:///X is a local path (egui_extras file_loader::convert_uri_to_path)
-    let img = egui::Image::new(format!("file:///{}", theme.background_image))
-        .tint(egui::Color32::WHITE.gamma_multiply(alpha));
+    let img = egui::Image::new(format!("file:///{}", theme.background_image));
     match img.load_for_size(ui.ctx(), rect.size()) {
         Ok(egui::load::TexturePoll::Ready { texture }) => {
             let scale = (rect.width() / texture.size.x).max(rect.height() / texture.size.y);
