@@ -110,9 +110,11 @@ impl ThemePanel {
         let mut picker_started: Option<std::sync::mpsc::Receiver<Option<std::path::PathBuf>>> =
             None;
         let screen = ctx.content_rect();
+        // no frame stroke: a four-sided border collides with the window edge
+        // and the OS focus ring at the flush top/left/bottom — the sheet's only
+        // border is the right-edge hairline painted after the content
         let frame = egui::Frame::new()
             .fill(ui.visuals().window_fill) // the derived raised-surface shade
-            .stroke(ui.visuals().window_stroke) // themed hairline, both modes
             .shadow(egui::Shadow {
                 offset: [3, 0],
                 blur: 14,
@@ -388,6 +390,14 @@ impl ThemePanel {
                         }
                     });
                 });
+                // the sheet's ONE border: a right-edge hairline riding the
+                // slide — painted after the frame so the fill can't cover it
+                let edge_x = screen.min.x - WIDTH * (1.0 - t) + WIDTH - 0.5;
+                ui.painter().vline(
+                    edge_x,
+                    screen.min.y..=screen.max.y,
+                    ui.visuals().window_stroke,
+                );
             });
         if close {
             self.open = false;

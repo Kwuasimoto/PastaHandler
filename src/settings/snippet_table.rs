@@ -44,8 +44,10 @@ impl SnippetTable {
     ) -> TableOutput {
         let mut out = TableOutput::default();
 
-        // fixed columns + flexible Text column that absorbs the remaining width
-        const SPACING: f32 = 10.0;
+        // fixed columns + flexible Text column that absorbs the remaining width.
+        // 6px gutter: the inputs' own inner padding already adds optical air,
+        // so a 10px gutter read as a hole between the text and its hotkey
+        const SPACING: f32 = 6.0;
         const TOGGLE_W: f32 = 40.0;
         const HOTKEY_W: f32 = 130.0;
         const DELETE_W: f32 = 36.0;
