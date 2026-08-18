@@ -14,6 +14,10 @@ pub struct SnippetTable {
     /// Row whose delete button was hovered last frame — drives its red tint;
     /// the tint must be chosen before this frame's hover state exists.
     hovered_delete: Option<usize>,
+    /// Why the last capture keypress was rejected — replaces the button's
+    /// "press keys…" prompt so the feedback appears exactly where the user is
+    /// already looking. Cleared when a new capture is armed.
+    capture_hint: Option<&'static str>,
 }
 
 #[derive(Default)]
@@ -27,7 +31,7 @@ pub struct TableOutput {
 
 impl SnippetTable {
     pub fn new() -> Self {
-        Self { capturing: None, hovered_delete: None }
+        Self { capturing: None, hovered_delete: None, capture_hint: None }
     }
 
     pub fn show(
@@ -128,12 +132,16 @@ impl SnippetTable {
                             let r_text = ui.add_sized([text_w, 26.0], text_edit);
                             // Hotkey cell: a button that captures the next combo when armed.
                             if self.capturing == Some(i) {
+                                // a rejected keypress must not fail silently: the
+                                // hint takes over the prompt, right under their eyes
+                                let (prompt, color) = match self.capture_hint {
+                                    Some(hint) => (hint, egui::Color32::from_rgb(220, 80, 80)),
+                                    None => ("press keys…", palette.accent),
+                                };
                                 let resp = ui.add_sized(
                                     [HOTKEY_W, 26.0],
                                     egui::Button::new(
-                                        egui::RichText::new("press keys…")
-                                            .italics()
-                                            .color(palette.accent),
+                                        egui::RichText::new(prompt).italics().color(color),
                                     ),
                                 );
                                 let events = ui.input(|inp| inp.events.clone());
@@ -155,6 +163,7 @@ impl SnippetTable {
                                         // bare keys would hijack normal typing system-wide;
                                         // require at least one modifier
                                         if !(modifiers.ctrl || modifiers.alt || modifiers.shift) {
+                                            self.capture_hint = Some("hold Ctrl / Alt / Shift");
                                             continue;
                                         }
                                         let combo = combo_from(&modifiers, key);
@@ -166,6 +175,7 @@ impl SnippetTable {
                                             out.just_activated = Some(i);
                                             break;
                                         }
+                                        self.capture_hint = Some("unsupported key");
                                     }
                                 }
                                 if resp.clicked() {
@@ -185,6 +195,7 @@ impl SnippetTable {
                                     .clicked()
                                 {
                                     self.capturing = Some(i);
+                                    self.capture_hint = None; // fresh capture, fresh prompt
                                 }
                             }
                             // lost_focus fires on click-away AND on Enter — one signal covers both
