@@ -33,6 +33,36 @@ unsafe extern "system" {
     ) -> isize;
 }
 
+#[link(name = "dwmapi")]
+unsafe extern "system" {
+    fn DwmSetWindowAttribute(
+        hwnd: isize,
+        attr: u32,
+        value: *const core::ffi::c_void,
+        size: u32,
+    ) -> i32;
+}
+
+const DWMWA_BORDER_COLOR: u32 = 34;
+const DWMWA_COLOR_DEFAULT: u32 = 0xFFFF_FFFF;
+const DWMWA_COLOR_NONE: u32 = 0xFFFF_FFFE;
+
+/// Show or hide Windows 11's accent-colored focus border on the settings
+/// window (the "focus outline"). Windows 10 ignores the attribute — harmless.
+pub fn set_system_border(show: bool) {
+    let color: u32 = if show { DWMWA_COLOR_DEFAULT } else { DWMWA_COLOR_NONE };
+    for hwnd in settings_windows() {
+        unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_BORDER_COLOR,
+                &color as *const u32 as *const core::ffi::c_void,
+                size_of::<u32>() as u32,
+            )
+        };
+    }
+}
+
 unsafe extern "system" fn collect_settings_windows(hwnd: isize, lparam: isize) -> i32 {
     let mut buf = [0u16; 64];
     let len = unsafe { GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32) };

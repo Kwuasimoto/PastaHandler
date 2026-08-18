@@ -43,6 +43,9 @@ pub struct Theme {
     /// Settings-window opacity, 77..=255 (~30%..100%). Below 255 the canvas
     /// turns to glass — the desktop shows through.
     pub window_opacity: u8,
+    /// Windows 11 draws an accent-colored focus border around every window;
+    /// off makes the window truly flush (DWMWA_BORDER_COLOR = none).
+    pub focus_outline: bool,
 }
 
 impl Default for Theme {
@@ -57,6 +60,7 @@ impl Default for Theme {
             borderless: false,
             background_image: String::new(),
             window_opacity: 255,
+            focus_outline: true,
         }
     }
 }
@@ -75,6 +79,7 @@ impl Theme {
             borderless: false,
             background_image: String::new(),
             window_opacity: 255,
+            focus_outline: true,
         }
     }
 }

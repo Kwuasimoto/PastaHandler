@@ -194,6 +194,16 @@ impl ThemePanel {
                                     changed = true;
                                 }
                                 ui.end_row();
+
+                                // Windows 11's accent ring around the focused
+                                // window; off = truly flush edges
+                                ui.label("Focus outline");
+                                if toggle_switch(ui, &mut theme.focus_outline, true, acc, kn)
+                                    .changed()
+                                {
+                                    changed = true; // the shell applies it on change
+                                }
+                                ui.end_row();
                             });
 
                         ui.add_space(8.0);

@@ -39,6 +39,8 @@ struct SettingsApp {
     error: Option<String>,
     theme_panel: ThemePanel,
     table: SnippetTable,
+    /// Last focus_outline value pushed to DWM — apply-on-change, not per-frame.
+    applied_outline: Option<bool>,
     /// Debug builds only: F12 toggles egui's live style editor.
     #[cfg(debug_assertions)]
     style_editor: bool,
@@ -124,6 +126,12 @@ impl eframe::App for SettingsApp {
         // the canvas first: color at the chosen opacity + optional image —
         // everything after paints on top of it
         paint_background(ui, &self.draft.theme);
+
+        // DWM focus border follows the theme; idempotent (startup + toggles)
+        if self.applied_outline != Some(self.draft.theme.focus_outline) {
+            crate::win32::set_system_border(self.draft.theme.focus_outline);
+            self.applied_outline = Some(self.draft.theme.focus_outline);
+        }
 
         let theme_committed = self.theme_panel.show(ui, &mut self.draft.theme);
 
@@ -223,6 +231,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
                 error: None,
                 theme_panel,
                 table: SnippetTable::new(),
+                applied_outline: None,
                 #[cfg(debug_assertions)]
                 style_editor: false,
             }))
@@ -247,6 +256,7 @@ mod tests {
             error: None,
             theme_panel: ThemePanel::new(),
             table: SnippetTable::new(),
+            applied_outline: None,
             #[cfg(debug_assertions)]
             style_editor: false,
         }
