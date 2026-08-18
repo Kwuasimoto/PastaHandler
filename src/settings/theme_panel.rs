@@ -72,6 +72,8 @@ fn preset_card(
 
 pub struct ThemePanel {
     pub open: bool,
+    /// Preset gallery expansion — collapsed shows only the first row.
+    presets_expanded: bool,
     /// In-flight native file dialog. rfd's pick_file BLOCKS its thread — run
     /// on the UI thread it freezes the window white if the dialog opens
     /// behind it. So it runs on its own thread and we poll the result here.
@@ -80,7 +82,7 @@ pub struct ThemePanel {
 
 impl ThemePanel {
     pub fn new() -> Self {
-        Self { open: false, picker: None }
+        Self { open: false, presets_expanded: false, picker: None }
     }
 
     /// Renders (sliding in over the content) while open; applies the style
@@ -103,6 +105,7 @@ impl ThemePanel {
         }
         let mut changed = false;
         let mut close = false;
+        let mut presets_expanded = self.presets_expanded;
         let self_picker_active = self.picker.is_some();
         let mut picker_started: Option<std::sync::mpsc::Receiver<Option<std::path::PathBuf>>> =
             None;
@@ -161,9 +164,12 @@ impl ThemePanel {
                         ui.add_space(2.0);
                         // two-column grid of live preview cards — each card IS
                         // its theme in miniature (bg, border, accent chip, text
-                        // color, corner radius), so you read it before you click
+                        // color, corner radius), so you read it before you click.
+                        // Collapsed, only the first row shows — real estate.
+                        let presets = Theme::presets();
+                        let shown = if presets_expanded { presets.len() } else { 2 };
                         let card_w = (ui.available_width() - 8.0) / 2.0;
-                        for pair in Theme::presets().chunks(2) {
+                        for pair in presets[..shown].chunks(2) {
                             ui.horizontal(|ui| {
                                 for (name, preset) in pair {
                                     if preset_card(ui, name, preset, theme, card_w).clicked()
@@ -181,6 +187,14 @@ impl ThemePanel {
                                 }
                             });
                             ui.add_space(6.0);
+                        }
+                        let expander = if presets_expanded {
+                            "Show less".to_owned()
+                        } else {
+                            format!("Show all ({} more)", presets.len() - shown)
+                        };
+                        if ui.link(egui::RichText::new(expander).small().weak()).clicked() {
+                            presets_expanded = !presets_expanded;
                         }
 
                         ui.add_space(8.0);
@@ -378,6 +392,7 @@ impl ThemePanel {
         if close {
             self.open = false;
         }
+        self.presets_expanded = presets_expanded;
         if let Some(rx) = picker_started {
             self.picker = Some(rx);
         }
