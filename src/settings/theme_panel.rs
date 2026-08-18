@@ -172,7 +172,16 @@ impl ThemePanel {
                     // auto_shrink OFF horizontally: the scroll lane fills the
                     // sheet so the bar pins to the edge — otherwise it shrinks
                     // to hug the content and rides along with any padding.
-                    egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+                    // max_height pins the viewport to the REAL window: the Area
+                    // is unconstrained (the slide needs that), so without a
+                    // hard bound, content growing while open (picking an image
+                    // adds the filename row, expanding presets adds rows)
+                    // regrows the sheet past the window bottom with no bar.
+                    let scroll_h = (screen.max.y - ui.cursor().top() - 14.0).max(80.0);
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, true])
+                        .max_height(scroll_h)
+                        .show(ui, |ui| {
                         // 12px: 8 of breathing room + 4 so the floating bar can
                         // fatten on hover without overlapping the content
                         ui.set_width(WIDTH - 16.0 - 12.0);
