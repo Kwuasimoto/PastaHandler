@@ -16,15 +16,17 @@ mod theme_panel;
 mod widgets;
 
 use snippet_table::SnippetTable;
-use style::{apply_style, install_fonts, mascot_for, mascot_smile_for, Palette};
+use style::{apply_style, install_fonts, mascot_for, mascot_smile_for, paint_background, Palette};
 use theme_panel::ThemePanel;
 
 /// The settings process's single public door — main.rs and the resident depend
 /// only on this signature.
 pub fn run(config_file: ConfigFile) -> Result<(), AppError> {
     // one settings window is the app's contract: a second launch (tray click,
-    // Start menu, double-tap) focuses the existing window instead of twinning
-    if !crate::win32::claim_single_instance("Local\\pastahandler-settings") {
+    // Start menu, double-tap) focuses the existing window instead of twinning.
+    // Debug capture rigs (PASTAHANDLER_DRAWER) spawn extra instances freely.
+    let test_rig = cfg!(debug_assertions) && std::env::var_os("PASTAHANDLER_DRAWER").is_some();
+    if !test_rig && !crate::win32::claim_single_instance("Local\\pastahandler-settings") {
         crate::win32::focus_settings_window();
         return Ok(());
     }
@@ -77,6 +79,12 @@ impl SettingsApp {
 }
 
 impl eframe::App for SettingsApp {
+    // fully transparent surface every frame — paint_background owns the canvas,
+    // and any opacity below 100% lets the desktop show through it
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0]
+    }
+
     // eframe 0.36: the trait method is `ui` (not the older `update`), and panels
     // are shown inside the provided `Ui`, not from a Context.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -113,6 +121,10 @@ impl eframe::App for SettingsApp {
             }
         }
 
+        // the canvas first: color at the chosen opacity + optional image —
+        // everything after paints on top of it
+        paint_background(ui, &self.draft.theme);
+
         let theme_committed = self.theme_panel.show(ui, &mut self.draft.theme);
 
         // borderless: the title strip hugs the top like native caption buttons do;
@@ -122,7 +134,10 @@ impl eframe::App for SettingsApp {
         } else {
             egui::Margin { left: 24, right: 24, top: 16, bottom: 10 }
         };
-        let panel_frame = egui::Frame::central_panel(ui.style()).inner_margin(margin);
+        // transparent fill: paint_background owns the canvas
+        let panel_frame = egui::Frame::central_panel(ui.style())
+            .fill(egui::Color32::TRANSPARENT)
+            .inner_margin(margin);
         egui::CentralPanel::default().frame(panel_frame).show(ui, |ui| {
             let mascot = mascot_for(&self.draft.theme);
 
@@ -184,7 +199,8 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
             .with_inner_size([640.0, 400.0])
             .with_min_inner_size([560.0, 300.0])
             .with_max_inner_size([1000.0, 800.0])
-            .with_decorations(!draft.theme.borderless),
+            .with_decorations(!draft.theme.borderless)
+            .with_transparent(true), // creation-time only — the opacity slider needs it ready
         ..Default::default()
     };
     eframe::run_native(

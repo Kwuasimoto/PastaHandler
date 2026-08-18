@@ -195,6 +195,60 @@ impl ThemePanel {
                                 }
                                 ui.end_row();
                             });
+
+                        ui.add_space(8.0);
+                        // opacity in percent; floored at 30 so the window can't vanish
+                        let mut pct =
+                            (theme.window_opacity as f32 / 2.55).round().clamp(30.0, 100.0) as u8;
+                        let before = pct;
+                        ui.horizontal(|ui| {
+                            ui.label("Opacity");
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.add(
+                                        egui::DragValue::new(&mut pct)
+                                            .range(30..=100)
+                                            .suffix("%"),
+                                    );
+                                },
+                            );
+                        });
+                        ui.scope(|ui| {
+                            ui.spacing_mut().slider_width = ui.available_width();
+                            ui.add(egui::Slider::new(&mut pct, 30..=100).show_value(false));
+                        });
+                        if pct != before {
+                            theme.window_opacity = (pct as f32 * 2.55).round().min(255.0) as u8;
+                            changed = true;
+                        }
+
+                        ui.add_space(8.0);
+                        ui.label("Background image");
+                        ui.add_space(2.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("Browse…").clicked()
+                                && let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("Images", &["png", "jpg", "jpeg", "bmp", "webp"])
+                                    .pick_file()
+                            {
+                                theme.background_image = path.display().to_string();
+                                changed = true;
+                            }
+                            if !theme.background_image.is_empty()
+                                && ui.button("Clear").clicked()
+                            {
+                                theme.background_image.clear();
+                                changed = true;
+                            }
+                        });
+                        if !theme.background_image.is_empty() {
+                            let name = std::path::Path::new(&theme.background_image)
+                                .file_name()
+                                .map(|n| n.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| theme.background_image.clone());
+                            ui.label(egui::RichText::new(name).small().weak());
+                        }
                     });
                 });
             });

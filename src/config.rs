@@ -37,6 +37,12 @@ pub struct Theme {
     pub corner_radius: u8,
     /// Remove the OS window border; the app draws its own title bar.
     pub borderless: bool,
+    /// Optional background image path (empty = none), drawn cover-fit behind
+    /// the settings content. Widget fills stay solid for readability.
+    pub background_image: String,
+    /// Settings-window opacity, 77..=255 (~30%..100%). Below 255 the canvas
+    /// turns to glass — the desktop shows through.
+    pub window_opacity: u8,
 }
 
 impl Default for Theme {
@@ -49,6 +55,8 @@ impl Default for Theme {
             knob: [235, 235, 235],
             corner_radius: 4,
             borderless: false,
+            background_image: String::new(),
+            window_opacity: 255,
         }
     }
 }
@@ -65,6 +73,8 @@ impl Theme {
             knob: [255, 249, 247],       // warm white
             corner_radius: 5,            // petal-soft
             borderless: false,
+            background_image: String::new(),
+            window_opacity: 255,
         }
     }
 }
