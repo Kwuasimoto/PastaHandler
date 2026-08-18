@@ -12,12 +12,12 @@ mod chrome;
 mod header;
 mod snippet_table;
 mod style;
-mod theme_window;
+mod theme_panel;
 mod widgets;
 
 use snippet_table::SnippetTable;
 use style::{apply_style, install_fonts, mascot_for, mascot_smile_for, Palette};
-use theme_window::ThemeWindow;
+use theme_panel::ThemePanel;
 
 /// The settings process's single public door — main.rs and the resident depend
 /// only on this signature.
@@ -29,7 +29,7 @@ struct SettingsApp {
     config_file: ConfigFile,
     draft: Config,
     error: Option<String>,
-    theme_window: ThemeWindow,
+    theme_panel: ThemePanel,
     table: SnippetTable,
     /// Debug builds only: F12 toggles egui's live style editor.
     #[cfg(debug_assertions)]
@@ -76,12 +76,14 @@ impl eframe::App for SettingsApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // COMPOSE ORDER — each numbered constraint is semantics, not style:
         //  1. F12 debug style editor (independent overlay)
-        //  2. mode-aware margin + CentralPanel
-        //  3. mascot picked PRE-theme-window (bg edits update it next frame, by design)
-        //  4. header (its drag-interact registers before its buttons — hit-test order)
-        //  5. header events applied (theme_open flips BEFORE the window shows)
-        //  6. theme window
-        //  7. palette built POST-theme-window (edits recolor the table the same frame)
+        //  2. theme drawer BEFORE the central panel — side panels claim their
+        //     width first. The header's toggle therefore lands next frame; the
+        //     slide animation makes that one-frame lag invisible.
+        //  3. mode-aware margin + CentralPanel
+        //  4. mascot picked POST-drawer (bg edits restyle it the same frame)
+        //  5. header (its drag-interact registers before its buttons — hit-test order)
+        //  6. header events applied (drawer toggle — see 2)
+        //  7. palette built POST-drawer (edits recolor the table the same frame)
         //  8. error_shown read PRE-commit (last frame's error sizes the scroll reserve)
         //  9. table → commit → error label, in that order
         // 10. footer, then the grip last so it paints over the corner
@@ -104,6 +106,8 @@ impl eframe::App for SettingsApp {
                     });
             }
         }
+
+        let theme_committed = self.theme_panel.show(ui, &mut self.draft.theme);
 
         // borderless: the title strip hugs the top like native caption buttons do;
         // decorated: the OS bar exists, so content keeps its comfortable margin
@@ -130,11 +134,10 @@ impl eframe::App for SettingsApp {
                 });
             }
             if header_out.toggle_theme {
-                self.theme_window.open = !self.theme_window.open;
+                self.theme_panel.open = !self.theme_panel.open;
             }
 
-            let ctx = ui.ctx().clone();
-            let mut committed = self.theme_window.show(&ctx, &mut self.draft.theme);
+            let mut committed = theme_committed;
 
             let palette = Palette::from_theme(&self.draft.theme);
             let error_shown = self.error.is_some();
@@ -172,7 +175,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
     let draft = config_file.read()?;
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([640.0, 400.0])
+            .with_inner_size([660.0, 400.0])
             .with_min_inner_size([560.0, 300.0])
             .with_max_inner_size([1000.0, 800.0])
             .with_decorations(!draft.theme.borderless),
@@ -189,7 +192,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
                 config_file,
                 draft,
                 error: None,
-                theme_window: ThemeWindow::new(),
+                theme_panel: ThemePanel::new(),
                 table: SnippetTable::new(),
                 #[cfg(debug_assertions)]
                 style_editor: false,
@@ -213,7 +216,7 @@ mod tests {
             config_file: ConfigFile::new(std::env::temp_dir().join(file_name)),
             draft: Config { snippets, open_settings_on_launch: false, theme: Theme::default() },
             error: None,
-            theme_window: ThemeWindow::new(),
+            theme_panel: ThemePanel::new(),
             table: SnippetTable::new(),
             #[cfg(debug_assertions)]
             style_editor: false,

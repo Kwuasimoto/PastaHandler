@@ -49,8 +49,10 @@ impl SnippetTable {
         const TOGGLE_W: f32 = 40.0;
         const HOTKEY_W: f32 = 130.0;
         const DELETE_W: f32 = 36.0;
+        // floor only binds while the theme drawer squeezes the central panel;
+        // full-width windows never reach it
         let text_w = (ui.available_width() - TOGGLE_W - HOTKEY_W - DELETE_W - 3.0 * SPACING)
-            .max(210.0);
+            .max(120.0);
 
         if snippets.is_empty() {
             // empty state: a prompt, not a bare table staring into the void

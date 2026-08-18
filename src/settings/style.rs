@@ -63,8 +63,8 @@ impl Palette {
 }
 
 /// The mascot adapts to the theme: dark ink on light backgrounds, light ink
-/// on dark. Computed BEFORE the theme window each frame (a background edit
-/// updates the mascot next frame — that is the intended behavior).
+/// on dark. Computed after the theme drawer each frame, so a background edit
+/// restyles the mascot the same frame.
 pub fn mascot_for(theme: &Theme) -> egui::ImageSource<'static> {
     if luma3(theme.background) > 128.0 {
         egui::include_image!("../../assets/icon-line-dark.svg")
