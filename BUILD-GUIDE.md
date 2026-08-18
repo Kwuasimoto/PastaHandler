@@ -401,8 +401,7 @@ grep -rnE "SendInput|keybd_event|SetWindowsHookEx|OpenProcess|ReadProcessMemory|
 
 ## v2 parking lot (write ideas here, don't build them)
 
-Friendlier validation messages · single-instance guards (resident named-mutex; settings window
-focus-instead-of-second) · `notify` crate over mtime polling · import/export · `thiserror`
+Friendlier validation messages · `notify` crate over mtime polling · import/export · `thiserror`
 migration · cross-platform · **never**: auto-paste.
 (Graduated to done: code signing → in progress via SignPath; log file next to config.toml →
-shipped in the audit pass.)
+shipped in the audit pass; single-instance guards → shipped in `win32.rs`.)

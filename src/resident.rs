@@ -23,38 +23,6 @@ enum AppEvent {
     Menu(MenuEvent),
 }
 
-// Tray Quit closes the WHOLE app, and settings is its own process — so the
-// resident asks every settings window to close on the way out. Narrow,
-// compliance-clean Win32 (see COMPLIANCE.md): enumerate top-level window
-// titles and post OUR windows a normal WM_CLOSE — the same message the ✕
-// button sends, so eframe shuts down cleanly. No process handles are opened
-// and nothing is injected or simulated; the compliance grep stays empty.
-const WM_CLOSE: u32 = 0x0010;
-
-#[link(name = "user32")]
-unsafe extern "system" {
-    fn EnumWindows(
-        callback: unsafe extern "system" fn(isize, isize) -> i32,
-        lparam: isize,
-    ) -> i32;
-    fn GetWindowTextW(hwnd: isize, buf: *mut u16, max_count: i32) -> i32;
-    fn PostMessageW(hwnd: isize, msg: u32, wparam: usize, lparam: isize) -> i32;
-}
-
-unsafe extern "system" fn close_if_settings(hwnd: isize, _lparam: isize) -> i32 {
-    let mut buf = [0u16; 64];
-    let len = unsafe { GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32) };
-    // must match launch_gui's eframe::run_native app name exactly
-    if String::from_utf16_lossy(&buf[..len.max(0) as usize]) == "PastaHandler Settings" {
-        unsafe { PostMessageW(hwnd, WM_CLOSE, 0, 0) };
-    }
-    1 // keep enumerating — several settings windows may be open
-}
-
-fn close_settings_windows() {
-    unsafe { EnumWindows(close_if_settings, 0) };
-}
-
 pub fn spawn_settings() {
     match std::env::current_exe() {
         Ok(exe) => {
@@ -67,6 +35,13 @@ pub fn spawn_settings() {
 }
 
 pub fn run(config_file: ConfigFile) -> Result<(), AppError> {
+    // second resident = a double-click on the Start-menu entry while one is
+    // already in the tray. Exit quietly; the first instance is the app.
+    if !crate::win32::claim_single_instance("Local\\pastahandler-resident") {
+        crate::logging::log_event("resident already running — duplicate exiting");
+        return Ok(());
+    }
+
     let mut config = config_file.read()?;
     let mut clipboard_manager = ClipboardManager::new(Clipboard::new()?);
     let mut hotkeys = Hotkeys::new()?;
@@ -128,7 +103,7 @@ pub fn run(config_file: ConfigFile) -> Result<(), AppError> {
             }
             Event::UserEvent(AppEvent::Menu(menu_event)) => {
                 if menu_event.id == tray.quit_id {
-                    close_settings_windows(); // quit means the whole app
+                    crate::win32::close_settings_windows(); // quit means the whole app
                     *control_flow = ControlFlow::Exit;
                 } else if menu_event.id == tray.open_id {
                     spawn_settings();

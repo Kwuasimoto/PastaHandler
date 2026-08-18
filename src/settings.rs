@@ -22,6 +22,12 @@ use theme_panel::ThemePanel;
 /// The settings process's single public door — main.rs and the resident depend
 /// only on this signature.
 pub fn run(config_file: ConfigFile) -> Result<(), AppError> {
+    // one settings window is the app's contract: a second launch (tray click,
+    // Start menu, double-tap) focuses the existing window instead of twinning
+    if !crate::win32::claim_single_instance("Local\\pastahandler-settings") {
+        crate::win32::focus_settings_window();
+        return Ok(());
+    }
     launch_gui(config_file)
 }
 
