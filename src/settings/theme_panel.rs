@@ -60,6 +60,10 @@ impl ThemePanel {
             .inner_margin(egui::Margin::same(14));
         egui::Area::new(egui::Id::new("theme-drawer"))
             .order(egui::Order::Foreground)
+            // THE load-bearing line: Areas default to constrain=true, which
+            // clamps them inside the window every frame — silently deleting a
+            // slide that parks off-screen. We own this position; no clamping.
+            .constrain(false)
             // the sheet unmounts while parked, so every open is a "new" area to
             // egui: kill the new-area fade (it fights the slide) and declare the
             // size upfront (an unsized first frame paints short, then snaps)
