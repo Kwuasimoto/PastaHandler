@@ -188,11 +188,18 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
             egui_extras::install_image_loaders(&cc.egui_ctx); // enables SVG assets
             install_fonts(&cc.egui_ctx);
             apply_style(&cc.egui_ctx, &draft.theme);
+            #[allow(unused_mut)]
+            let mut theme_panel = ThemePanel::new();
+            // dev-only test hook: capture rigs verify drawer layout hands-free
+            #[cfg(debug_assertions)]
+            if std::env::var_os("PASTAHANDLER_DRAWER").is_some() {
+                theme_panel.open = true;
+            }
             Ok(Box::new(SettingsApp {
                 config_file,
                 draft,
                 error: None,
-                theme_panel: ThemePanel::new(),
+                theme_panel,
                 table: SnippetTable::new(),
                 #[cfg(debug_assertions)]
                 style_editor: false,

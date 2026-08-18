@@ -57,7 +57,10 @@ impl ThemePanel {
                 spread: 0,
                 color: egui::Color32::from_black_alpha(45),
             })
-            .inner_margin(egui::Margin::same(14));
+            // asymmetric on purpose: the right margin is 2 so the scrollbar and
+            // the close button hug the sheet edge; the content's breathing room
+            // from the bar is its own 8px inset inside the scroll area
+            .inner_margin(egui::Margin { left: 14, right: 2, top: 14, bottom: 14 });
         egui::Area::new(egui::Id::new("theme-drawer"))
             .order(egui::Order::Foreground)
             // THE load-bearing line: Areas default to constrain=true, which
@@ -72,10 +75,9 @@ impl ThemePanel {
             .fixed_pos(egui::pos2(screen.min.x - WIDTH * (1.0 - t), screen.min.y))
             .show(&ctx, |ui| {
                 frame.show(ui, |ui| {
-                    ui.set_width(WIDTH - 28.0); // frame margins account for the rest
+                    ui.set_width(WIDTH - 16.0); // frame margins account for the rest
                     ui.set_min_height(screen.height() - 28.0); // full-height sheet
                     ui.spacing_mut().interact_size = egui::vec2(56.0, 24.0); // wider swatches
-                    ui.spacing_mut().slider_width = 64.0; // + its value box stays inside WIDTH
 
                     // drawer header: title left, quiet ghost close right
                     ui.horizontal(|ui| {
@@ -90,6 +92,7 @@ impl ThemePanel {
 
                     // short main window => theme sections scroll into reach
                     egui::ScrollArea::vertical().show(ui, |ui| {
+                        ui.set_width(WIDTH - 16.0 - 8.0); // content stays 8px clear of the bar
                         ui.label(egui::RichText::new("PRESETS").small().weak());
                         ui.add_space(2.0);
                         ui.horizontal(|ui| {
@@ -136,17 +139,31 @@ impl ThemePanel {
 
                         ui.label(egui::RichText::new("SHAPE").small().weak());
                         ui.add_space(2.0);
-                        egui::Grid::new("theme-shape")
-                            .num_columns(2)
-                            .min_col_width(96.0)
-                            .spacing([12.0, 8.0])
-                            .show(ui, |ui| {
-                                ui.label("Corner radius");
-                                changed |= ui
-                                    .add(egui::Slider::new(&mut theme.corner_radius, 0..=12))
-                                    .changed();
-                                ui.end_row();
-                            });
+                        // label + value up top, full-width slider underneath —
+                        // the inline three-piece row didn't fit the sheet
+                        ui.horizontal(|ui| {
+                            ui.label("Corner radius");
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    changed |= ui
+                                        .add(
+                                            egui::DragValue::new(&mut theme.corner_radius)
+                                                .range(0..=12),
+                                        )
+                                        .changed();
+                                },
+                            );
+                        });
+                        ui.scope(|ui| {
+                            ui.spacing_mut().slider_width = ui.available_width();
+                            changed |= ui
+                                .add(
+                                    egui::Slider::new(&mut theme.corner_radius, 0..=12)
+                                        .show_value(false),
+                                )
+                                .changed();
+                        });
 
                         ui.add_space(8.0);
                         ui.separator();
