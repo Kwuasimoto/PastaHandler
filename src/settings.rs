@@ -76,9 +76,9 @@ impl eframe::App for SettingsApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // COMPOSE ORDER — each numbered constraint is semantics, not style:
         //  1. F12 debug style editor (independent overlay)
-        //  2. theme drawer BEFORE the central panel — side panels claim their
-        //     width first. The header's toggle therefore lands next frame; the
-        //     slide animation makes that one-frame lag invisible.
+        //  2. theme drawer — an overlay (Foreground order), so it costs the
+        //     content no layout. Shown before the header, so its toggle lands
+        //     next frame; the slide animation makes that lag invisible.
         //  3. mode-aware margin + CentralPanel
         //  4. mascot picked POST-drawer (bg edits restyle it the same frame)
         //  5. header (its drag-interact registers before its buttons — hit-test order)
@@ -175,7 +175,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
     let draft = config_file.read()?;
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([660.0, 400.0])
+            .with_inner_size([640.0, 400.0])
             .with_min_inner_size([560.0, 300.0])
             .with_max_inner_size([1000.0, 800.0])
             .with_decorations(!draft.theme.borderless),
