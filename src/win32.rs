@@ -31,6 +31,9 @@ unsafe extern "system" {
         initial_owner: i32,
         name: *const u16,
     ) -> isize;
+    fn GetModuleHandleW(name: *const u16) -> isize;
+    fn GetProcAddress(module: isize, name: *const core::ffi::c_char)
+        -> *const core::ffi::c_void;
 }
 
 #[link(name = "dwmapi")]
@@ -43,34 +46,64 @@ unsafe extern "system" {
     ) -> i32;
 }
 
-#[link(name = "user32")]
-unsafe extern "system" {
-    fn GetWindowLongPtrW(hwnd: isize, index: i32) -> isize;
-    fn SetWindowLongPtrW(hwnd: isize, index: i32, value: isize) -> isize;
-    fn SetLayeredWindowAttributes(hwnd: isize, color_key: u32, alpha: u8, flags: u32) -> i32;
+#[repr(C)]
+struct AccentPolicy {
+    accent_state: u32,
+    flags: u32,
+    gradient_color: u32,
+    animation_id: u32,
 }
 
-const GWL_EXSTYLE: i32 = -20;
-const WS_EX_LAYERED: isize = 0x0008_0000;
-const LWA_ALPHA: u32 = 0x2;
+#[repr(C)]
+struct WindowCompositionAttribData {
+    attrib: u32,
+    data: *mut core::ffi::c_void,
+    size: usize,
+}
 
-/// Whole-window opacity via the layered-window alpha — DWM fades the entire
-/// window uniformly, so the desktop genuinely shows through. This is the
-/// approach that works regardless of renderer; per-pixel framebuffer alpha
-/// (solid widgets on a clear canvas) is not honored by the swapchain
-/// compositing on this stack — it renders on black.
-///
-/// Called EVERY frame, self-healing: winit rebuilds the extended style from
-/// its own flag cache on window events, wiping foreign bits — so we re-add
-/// WS_EX_LAYERED whenever it has gone missing. The check is one cheap call.
-pub fn set_window_alpha(hwnd: isize, alpha: u8) {
-    unsafe {
-        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        if ex & WS_EX_LAYERED == 0 {
-            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED);
-        }
-        SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
-    }
+const WCA_ACCENT_POLICY: u32 = 19;
+const ACCENT_ENABLE_BLURBEHIND: u32 = 3;
+
+type SetWindowCompositionAttributeFn =
+    unsafe extern "system" fn(isize, *mut WindowCompositionAttribData) -> i32;
+
+/// The switch that makes per-pixel transparency REAL: the BLURBEHIND accent
+/// policy has DWM composite whatever is behind the window — blurred, frosted-
+/// glass style — wherever the canvas leaves alpha open. Without it,
+/// framebuffer alpha renders on black. Undocumented but decade-stable
+/// (Windows Terminal, PowerToys, Tauri vibrancy all ride it) — and being
+/// undocumented it is absent from the SDK import lib, hence the
+/// GetProcAddress lookup. Choices that matter: BLURBEHIND (3) composites
+/// windows behind, while TRANSPARENTGRADIENT (2) shows only the bare
+/// wallpaper on current builds; ACRYLICBLURBEHIND (4) has the known
+/// window-drag lag. Requires the glow renderer — wgpu presents with
+/// alpha-mode IGNORE, so its framebuffer alpha never reaches this layer.
+pub fn enable_glass(hwnd: isize) {
+    let user32: Vec<u16> = "user32.dll\0".encode_utf16().collect();
+    let func: Option<SetWindowCompositionAttributeFn> = unsafe {
+        let module = GetModuleHandleW(user32.as_ptr());
+        std::mem::transmute(GetProcAddress(module, c"SetWindowCompositionAttribute".as_ptr()))
+    };
+    let Some(set_attribute) = func else {
+        crate::logging::log_event("glass accent unavailable (no SetWindowCompositionAttribute)");
+        return;
+    };
+    let mut policy = AccentPolicy {
+        accent_state: ACCENT_ENABLE_BLURBEHIND,
+        flags: 0,
+        // ABGR, alpha 1: a zero-alpha gradient makes the accent layer render
+        // its own gray haze; a near-invisible tint collapses it into true
+        // desktop passthrough (the folklore-documented quirk)
+        gradient_color: 0x0100_0000,
+        animation_id: 0,
+    };
+    let mut data = WindowCompositionAttribData {
+        attrib: WCA_ACCENT_POLICY,
+        data: (&mut policy as *mut AccentPolicy).cast(),
+        size: size_of::<AccentPolicy>(),
+    };
+    let ok = unsafe { set_attribute(hwnd, &mut data) };
+    crate::logging::log_event(&format!("glass accent hwnd={hwnd} ok={ok}"));
 }
 
 const DWMWA_BORDER_COLOR: u32 = 34;

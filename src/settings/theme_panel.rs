@@ -214,11 +214,10 @@ impl ThemePanel {
                             });
 
                         ui.add_space(8.0);
-                        // opacity in percent, floored at 10: a window that can
-                        // persist itself invisible is a lockout, not a feature
-                        // (the whole window fades — this row included)
+                        // canvas opacity in percent; 0 is safe — only the
+                        // canvas fades, the widgets (this row included) stay solid
                         let mut pct =
-                            (theme.window_opacity as f32 / 2.55).round().clamp(10.0, 100.0) as u8;
+                            (theme.window_opacity as f32 / 2.55).round().clamp(0.0, 100.0) as u8;
                         let before = pct;
                         ui.horizontal(|ui| {
                             ui.label("Opacity");
@@ -227,7 +226,7 @@ impl ThemePanel {
                                 |ui| {
                                     ui.add(
                                         egui::DragValue::new(&mut pct)
-                                            .range(10..=100)
+                                            .range(0..=100)
                                             .suffix("%"),
                                     );
                                 },
@@ -235,7 +234,7 @@ impl ThemePanel {
                         });
                         ui.scope(|ui| {
                             ui.spacing_mut().slider_width = ui.available_width();
-                            ui.add(egui::Slider::new(&mut pct, 10..=100).show_value(false));
+                            ui.add(egui::Slider::new(&mut pct, 0..=100).show_value(false));
                         });
                         if pct != before {
                             theme.window_opacity = (pct as f32 * 2.55).round().min(255.0) as u8;

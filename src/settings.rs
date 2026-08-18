@@ -81,6 +81,13 @@ impl SettingsApp {
 }
 
 impl eframe::App for SettingsApp {
+    // fully transparent surface every frame: paint_background owns the canvas,
+    // and the DWM accent policy (win32::enable_glass) composites the desktop
+    // behind whatever alpha the canvas leaves open
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0]
+    }
+
     // eframe 0.36: the trait method is `ui` (not the older `update`), and panels
     // are shown inside the provided `Ui`, not from a Context.
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
@@ -117,24 +124,24 @@ impl eframe::App for SettingsApp {
             }
         }
 
-        // the canvas first: theme color + optional image — everything after
-        // paints on top of it (window opacity is layered alpha, not paint)
+        // the canvas first: theme color and optional image at the chosen
+        // opacity — everything after paints (solid) on top of it
         paint_background(ui, &self.draft.theme);
 
         // window-level Win32 state follows the theme. Our own HWND comes from
         // eframe — never window enumeration in-frame (same-process
-        // GetWindowTextW re-enters the wndproc and deadlocks). The alpha is
-        // reasserted every frame because winit's style refreshes wipe it.
-        if let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(frame)
+        // GetWindowTextW re-enters the wndproc and deadlocks).
+        if self.applied_outline != Some(self.draft.theme.focus_outline)
+            && let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(frame)
             && let raw_window_handle::RawWindowHandle::Win32(w) = handle.as_raw()
         {
-            if self.applied_outline != Some(self.draft.theme.focus_outline) {
-                crate::win32::set_system_border(w.hwnd.get(), self.draft.theme.focus_outline);
-                self.applied_outline = Some(self.draft.theme.focus_outline);
+            if self.applied_outline.is_none() {
+                // first frame only: the DWM accent policy that makes the
+                // canvas's per-pixel alpha composite against the desktop
+                crate::win32::enable_glass(w.hwnd.get());
             }
-            // floor at ~10% no matter what the file says: a stale or hand-
-            // edited 0 must never open an invisible window
-            crate::win32::set_window_alpha(w.hwnd.get(), self.draft.theme.window_opacity.max(26));
+            crate::win32::set_system_border(w.hwnd.get(), self.draft.theme.focus_outline);
+            self.applied_outline = Some(self.draft.theme.focus_outline);
         }
 
         let theme_committed = self.theme_panel.show(ui, &mut self.draft.theme);
@@ -207,11 +214,16 @@ impl eframe::App for SettingsApp {
 fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
     let draft = config_file.read()?;
     let options = eframe::NativeOptions {
+        // glow, not the default wgpu: wgpu presents with alpha-mode IGNORE on
+        // Windows, so the canvas per-pixel alpha never reaches the DWM accent
+        // layer. glow WGL presents carry the framebuffer alpha through.
+        renderer: eframe::Renderer::Glow,
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([640.0, 400.0])
             .with_min_inner_size([560.0, 300.0])
             .with_max_inner_size([1000.0, 800.0])
-            .with_decorations(!draft.theme.borderless),
+            .with_decorations(!draft.theme.borderless)
+            .with_transparent(true), // the canvas's per-pixel alpha needs an alpha surface
         ..Default::default()
     };
     eframe::run_native(
