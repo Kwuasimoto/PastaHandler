@@ -89,7 +89,7 @@ impl eframe::App for SettingsApp {
 
     // eframe 0.36: the trait method is `ui` (not the older `update`), and panels
     // are shown inside the provided `Ui`, not from a Context.
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         // COMPOSE ORDER — each numbered constraint is semantics, not style:
         //  1. F12 debug style editor (independent overlay)
         //  2. theme drawer — an overlay (Foreground order), so it costs the
@@ -127,9 +127,14 @@ impl eframe::App for SettingsApp {
         // everything after paints on top of it
         paint_background(ui, &self.draft.theme);
 
-        // DWM focus border follows the theme; idempotent (startup + toggles)
-        if self.applied_outline != Some(self.draft.theme.focus_outline) {
-            crate::win32::set_system_border(self.draft.theme.focus_outline);
+        // DWM focus border follows the theme; idempotent (startup + toggles).
+        // Our own HWND comes from eframe — never window enumeration in-frame
+        // (same-process GetWindowTextW re-enters the wndproc and deadlocks).
+        if self.applied_outline != Some(self.draft.theme.focus_outline)
+            && let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(frame)
+            && let raw_window_handle::RawWindowHandle::Win32(w) = handle.as_raw()
+        {
+            crate::win32::set_system_border(w.hwnd.get(), self.draft.theme.focus_outline);
             self.applied_outline = Some(self.draft.theme.focus_outline);
         }
 

@@ -25,4 +25,5 @@ serde         = { version = "1.0.228", features = ["derive"] }
 image         = "0.25.9"
 toml          = "1.1"
 rfd           = "0.17.2" # native file picker for the background image
+raw-window-handle = "0.6.2"
 

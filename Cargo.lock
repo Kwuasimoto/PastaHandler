@@ -3362,6 +3362,7 @@ dependencies = [
  "egui_extras",
  "global-hotkey",
  "image",
+ "raw-window-handle",
  "rfd",
  "serde",
  "tao",
