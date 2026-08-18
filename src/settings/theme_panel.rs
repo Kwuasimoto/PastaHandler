@@ -12,7 +12,7 @@ use eframe::egui;
 use super::chrome::{caption_button, CaptionIcon};
 use super::style::{apply_style, rgb};
 use super::widgets::toggle_switch;
-use crate::config::Theme;
+use crate::config::{PresetPalette, Theme, PRESETS};
 
 /// Outer sheet width, frame margins included. Sized to its own content only —
 /// overlaying means the table's layout never depends on this number.
@@ -24,18 +24,13 @@ const WIDTH: f32 = 250.0;
 fn preset_card(
     ui: &mut egui::Ui,
     name: &str,
-    preset: &Theme,
+    preset: &PresetPalette,
     current: &Theme,
     width: f32,
 ) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 40.0), egui::Sense::click());
     if ui.is_rect_visible(rect) {
-        let selected = current.accent == preset.accent
-            && current.background == preset.background
-            && current.text == preset.text
-            && current.border == preset.border
-            && current.knob == preset.knob
-            && current.corner_radius == preset.corner_radius;
+        let selected = current.palette() == *preset;
         let radius = egui::CornerRadius::same(preset.corner_radius.min(12));
         ui.painter().rect_filled(rect, radius, rgb(preset.background));
         let stroke = if selected {
@@ -191,22 +186,16 @@ impl ThemePanel {
                         // its theme in miniature (bg, border, accent chip, text
                         // color, corner radius), so you read it before you click.
                         // Collapsed, only the first row shows — real estate.
-                        let presets = Theme::presets();
-                        let shown = if presets_expanded { presets.len() } else { 2 };
+                        let shown = if presets_expanded { PRESETS.len() } else { 2 };
                         let card_w = (ui.available_width() - 8.0) / 2.0;
-                        for pair in presets[..shown].chunks(2) {
+                        for pair in PRESETS[..shown].chunks(2) {
                             ui.horizontal(|ui| {
                                 for (name, preset) in pair {
                                     if preset_card(ui, name, preset, theme, card_w).clicked()
                                     {
-                                        // presets are PALETTES: colors + radius
-                                        // only; window behavior stays yours
-                                        theme.accent = preset.accent;
-                                        theme.background = preset.background;
-                                        theme.text = preset.text;
-                                        theme.border = preset.border;
-                                        theme.knob = preset.knob;
-                                        theme.corner_radius = preset.corner_radius;
+                                        // the type guarantees palette-only —
+                                        // window behavior stays yours
+                                        theme.apply_palette(preset);
                                         changed = true;
                                     }
                                 }
@@ -216,7 +205,7 @@ impl ThemePanel {
                         let expander = if presets_expanded {
                             "Show less".to_owned()
                         } else {
-                            format!("Show all ({} more)", presets.len() - shown)
+                            format!("Show all ({} more)", PRESETS.len() - shown)
                         };
                         if ui.link(egui::RichText::new(expander).small().weak()).clicked() {
                             presets_expanded = !presets_expanded;
