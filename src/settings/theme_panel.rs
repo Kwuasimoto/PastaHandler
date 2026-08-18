@@ -107,15 +107,17 @@ impl ThemePanel {
                         ui.set_width(WIDTH - 16.0 - 12.0);
                         ui.label(egui::RichText::new("PRESETS").small().weak());
                         ui.add_space(2.0);
-                        ui.horizontal(|ui| {
-                            for (name, preset) in
-                                [("Default", Theme::default()), ("Sakura", Theme::sakura())]
-                            {
+                        ui.horizontal_wrapped(|ui| {
+                            for (name, preset) in Theme::presets() {
                                 if ui.button(name).clicked() {
-                                    // presets restyle; the window-border choice is yours to keep
-                                    let borderless = theme.borderless;
-                                    *theme = preset;
-                                    theme.borderless = borderless;
+                                    // presets are PALETTES: colors + radius only;
+                                    // window behavior stays exactly as you set it
+                                    theme.accent = preset.accent;
+                                    theme.background = preset.background;
+                                    theme.text = preset.text;
+                                    theme.border = preset.border;
+                                    theme.knob = preset.knob;
+                                    theme.corner_radius = preset.corner_radius;
                                     changed = true;
                                 }
                             }
@@ -177,8 +179,13 @@ impl ThemePanel {
                                 .changed();
                         });
 
+                        ui.add_space(8.0);
+                        ui.separator();
                         ui.add_space(6.0);
-                        egui::Grid::new("theme-stripes")
+
+                        ui.label(egui::RichText::new("BEHAVIOR").small().weak());
+                        ui.add_space(2.0);
+                        egui::Grid::new("theme-behavior")
                             .num_columns(2)
                             .min_col_width(96.0)
                             .spacing([12.0, 8.0])

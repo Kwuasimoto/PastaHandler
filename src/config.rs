@@ -94,6 +94,104 @@ impl Theme {
             row_stripes: true,
         }
     }
+
+    /// The preset gallery. Presets are PALETTES: the drawer applies only the
+    /// five colors + corner radius from these — window behavior (borderless,
+    /// opacity, blur, image, stripes) always stays the user's. Researched
+    /// palettes cite their grounding; the rest state their reasoning.
+    pub fn presets() -> Vec<(&'static str, Theme)> {
+        let d = Theme::default;
+        vec![
+            ("Default", d()),
+            ("Sakura", Theme::sakura()),
+            // candy design convention: saturated bubblegum pink on candy-white,
+            // grounded by deep plum text for contrast (palette-guide consensus)
+            ("Candy", Theme {
+                accent: [255, 111, 181],
+                background: [255, 233, 243],
+                text: [90, 34, 70],
+                border: [245, 184, 216],
+                knob: [255, 255, 255],
+                corner_radius: 10, // gumdrop-round
+                ..d()
+            }),
+            // nebula palettes: electric violet ("plasma") glowing on deep-space
+            // indigo, starlight text
+            ("Cosmic", Theme {
+                accent: [141, 124, 238],
+                background: [18, 14, 40],
+                text: [232, 230, 244],
+                border: [72, 60, 120],
+                knob: [235, 232, 250],
+                corner_radius: 6,
+                ..d()
+            }),
+            // no canon exists — synthesized: gunmetal steel watchtower with an
+            // amber warning-light accent, square military edges
+            ("Sentinel", Theme {
+                accent: [255, 171, 64],
+                background: [22, 27, 34],
+                text: [206, 216, 226],
+                border: [56, 68, 82],
+                knob: [228, 234, 240],
+                corner_radius: 2,
+                ..d()
+            }),
+            // per spec: Gears + God of War = near-black ash, blood-crimson accent
+            ("GoW", Theme {
+                accent: [196, 30, 35],
+                background: [16, 13, 13],
+                text: [214, 205, 200],
+                border: [72, 46, 46],
+                knob: [226, 216, 212],
+                corner_radius: 3,
+                ..d()
+            }),
+            // Master Chief MJOLNIR green #507D2A on UNSC green-black; the
+            // toggle knob is the visor gold
+            ("Halo", Theme {
+                accent: [80, 125, 42],
+                background: [18, 24, 16],
+                text: [212, 220, 208],
+                border: [58, 72, 48],
+                knob: [255, 196, 80],
+                corner_radius: 4,
+                ..d()
+            }),
+            // Riot's published brand set: gold #C89B3C on dark navy #0A1428,
+            // hextech cream #F0E6D2 text, dark-gold #785A28 borders
+            ("League", Theme {
+                accent: [200, 155, 60],
+                background: [10, 20, 40],
+                text: [240, 230, 210],
+                border: [120, 90, 40],
+                knob: [240, 230, 210],
+                corner_radius: 4,
+                ..d()
+            }),
+            // the fruit itself: ripe red on cream-blush flesh, deep berry text
+            ("Strawberry", Theme {
+                accent: [224, 66, 84],
+                background: [255, 243, 240],
+                text: [108, 26, 38],
+                border: [244, 190, 190],
+                knob: [255, 251, 245],
+                corner_radius: 8,
+                ..d()
+            }),
+            // espresso #2B1E16 lineage with latte-cream text and a caramel
+            // accent (coffee palette consensus: espresso / cream / caramel)
+            ("Coffee", Theme {
+                accent: [216, 160, 120],
+                background: [43, 30, 22],
+                text: [244, 238, 228],
+                border: [94, 70, 54],
+                knob: [246, 241, 233],
+                corner_radius: 6,
+                ..d()
+            }),
+        ]
+    }
 }
 
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
