@@ -79,7 +79,7 @@ impl SnippetTable {
             .max_height((ui.available_height() - reserve).max(80.0))
             .show(ui, |ui| {
                 egui::Grid::new("snippets")
-                    .striped(true)
+                    .striped(palette.row_stripes)
                     .num_columns(4)
                     // egui's default min_col_width (interact_size.x = 40) silently
                     // widens the 36px delete column, pushing every row 4px past the
@@ -138,12 +138,22 @@ impl SnippetTable {
                                     Some(hint) => (hint, egui::Color32::from_rgb(220, 80, 80)),
                                     None => ("press keys…", palette.accent),
                                 };
-                                let resp = ui.add_sized(
-                                    [HOTKEY_W, 26.0],
-                                    egui::Button::new(
-                                        egui::RichText::new(prompt).italics().color(color),
-                                    ),
-                                );
+                                // 24 renders as 26 (stroke adds 1px above and
+                                // below) — and the button only honors 24 when
+                                // its padding lets the intrinsic size fit
+                                let resp = ui
+                                    .scope(|ui| {
+                                        ui.spacing_mut().button_padding.y = 2.0;
+                                        ui.add_sized(
+                                            [HOTKEY_W, 24.0],
+                                            egui::Button::new(
+                                                egui::RichText::new(prompt)
+                                                    .italics()
+                                                    .color(color),
+                                            ),
+                                        )
+                                    })
+                                    .inner;
                                 let events = ui.input(|inp| inp.events.clone());
                                 for ev in events {
                                     if let egui::Event::Key {
@@ -190,7 +200,11 @@ impl SnippetTable {
                                     egui::RichText::new(&snippet.hotkey).color(palette.dim)
                                 };
                                 if ui
-                                    .add_sized([HOTKEY_W, 26.0], egui::Button::new(label))
+                                    .scope(|ui| {
+                                        ui.spacing_mut().button_padding.y = 2.0;
+                                        ui.add_sized([HOTKEY_W, 24.0], egui::Button::new(label))
+                                    })
+                                    .inner
                                     .on_hover_text("Click, then press the key combo (Esc cancels)")
                                     .clicked()
                                 {

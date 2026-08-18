@@ -177,6 +177,25 @@ impl ThemePanel {
                                 .changed();
                         });
 
+                        ui.add_space(6.0);
+                        egui::Grid::new("theme-stripes")
+                            .num_columns(2)
+                            .min_col_width(96.0)
+                            .spacing([12.0, 8.0])
+                            .show(ui, |ui| {
+                                // solid stripe fills float oddly on a
+                                // transparent canvas — let people opt out
+                                ui.label("Row stripes");
+                                let acc = rgb(theme.accent);
+                                let kn = rgb(theme.knob);
+                                if toggle_switch(ui, &mut theme.row_stripes, true, acc, kn)
+                                    .changed()
+                                {
+                                    changed = true;
+                                }
+                                ui.end_row();
+                            });
+
                         ui.add_space(8.0);
                         ui.separator();
                         ui.add_space(6.0);

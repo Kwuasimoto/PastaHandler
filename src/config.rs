@@ -51,6 +51,9 @@ pub struct Theme {
     /// (acrylic-style); off, it shows through sharp. Transparency itself is
     /// unconditional — opacity always reveals the desktop.
     pub blur: bool,
+    /// Alternate-row shading in the snippet table. Solid fills read well on a
+    /// solid canvas and like floating blocks on a transparent one.
+    pub row_stripes: bool,
 }
 
 impl Default for Theme {
@@ -67,6 +70,7 @@ impl Default for Theme {
             window_opacity: 255,
             focus_outline: true,
             blur: true,
+            row_stripes: true,
         }
     }
 }
@@ -87,6 +91,7 @@ impl Theme {
             window_opacity: 255,
             focus_outline: true,
             blur: true,
+            row_stripes: true,
         }
     }
 }

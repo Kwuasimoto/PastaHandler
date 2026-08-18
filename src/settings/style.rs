@@ -50,6 +50,8 @@ pub struct Palette {
     pub knob: egui::Color32,
     /// Inactive-row text, ghost icons, and the resting resize grip.
     pub dim: egui::Color32,
+    /// Alternate-row shading in the snippet table (off for transparent looks).
+    pub row_stripes: bool,
 }
 
 impl Palette {
@@ -58,6 +60,7 @@ impl Palette {
             accent: rgb(theme.accent),
             knob: rgb(theme.knob),
             dim: scale(theme.text, 0.52),
+            row_stripes: theme.row_stripes,
         }
     }
 }
