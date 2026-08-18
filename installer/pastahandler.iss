@@ -1,17 +1,21 @@
-; PastaHandler installer — compile with: iscc pastahandler.iss
-; Produces Output\pastahandler-setup-0.1.0.exe
+; PastaHandler installer — compile with: iscc /DAppVersion=x.y.z pastahandler.iss
+; Produces Output\pastahandler-setup.exe (the name the evergreen release link serves).
+; CI passes AppVersion from the git tag; a hand build without it is marked dev.
+#ifndef AppVersion
+  #define AppVersion "0.0.0-dev"
+#endif
 
 [Setup]
 AppId={{A3F6B2D1-58C4-4E9A-9B7F-2D1C6E8A4F30}
 AppName=PastaHandler
-AppVersion=0.1.0
+AppVersion={#AppVersion}
 AppPublisher=Kwuasimoto
 AppPublisherURL=https://github.com/Kwuasimoto/PastaHandler
 DefaultDirName={autopf}\PastaHandler
 DisableProgramGroupPage=yes
 ; per-user install: no UAC prompt, {autopf} resolves to %LOCALAPPDATA%\Programs
 PrivilegesRequired=lowest
-OutputBaseFilename=pastahandler-setup-0.1.0
+OutputBaseFilename=pastahandler-setup
 SetupIconFile=..\assets\icon.ico
 UninstallDisplayIcon={app}\pastahandler.exe
 Compression=lzma2

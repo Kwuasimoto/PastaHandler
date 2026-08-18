@@ -1,0 +1,63 @@
+# Release pipeline: push a tag like v0.1.1 and this builds the exe and installer
+# on a clean Windows runner, then publishes the GitHub release. The evergreen
+# README link (releases/latest/download/pastahandler-setup.exe) depends on the
+# asset name produced here.
+#
+# Dry run: trigger manually (workflow_dispatch) — builds everything, publishes
+# nothing.
+#
+# SignPath (planned): signing slots in after "Build release exe" — sign the exe,
+# rebuild the installer around the signed exe, sign the installer, then publish.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches Cargo.toml version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          $tag = "$env:GITHUB_REF_NAME".TrimStart("v")
+          $cargo = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"' |
+              Select-Object -First 1).Matches[0].Groups[1].Value
+          if ($tag -ne $cargo) {
+            throw "tag v$tag does not match Cargo.toml version $cargo - bump Cargo.toml first"
+          }
+
+      - name: Lint and test
+        run: |
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+
+      - name: Build release exe
+        run: cargo build --release
+
+      - name: Build installer
+        run: |
+          $version = if ($env:GITHUB_REF_NAME -like "v*") {
+            "$env:GITHUB_REF_NAME".TrimStart("v")
+          } else {
+            "0.0.0-dev"
+          }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DAppVersion=$version" installer\pastahandler.iss
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$env:GITHUB_REF_NAME" installer\Output\pastahandler-setup.exe `
+            --title "PastaHandler $env:GITHUB_REF_NAME" --generate-notes
