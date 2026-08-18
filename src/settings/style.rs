@@ -160,15 +160,13 @@ pub fn mascot_for(theme: &Theme) -> egui::ImageSource<'static> {
     }
 }
 
-/// The hover face: same ink as `mascot_for`, mouth open in a smile, blushing.
-/// The header swaps it in while the pointer rests on the mascot. The filled
-/// bowl has no smile variant (its mouth is baked into compound color paths),
-/// so it keeps its face — the Easter egg rests while Filled is selected.
+/// The hover face: same artwork as `mascot_for`, mouth open in a smile,
+/// blushing. The header swaps it in while the pointer rests on the mascot.
 pub fn mascot_smile_for(theme: &Theme) -> egui::ImageSource<'static> {
     match resolved_mascot(theme) {
         MascotStyle::Dark => egui::include_image!("../../assets/icon-line-dark-smile.svg"),
         MascotStyle::Light => egui::include_image!("../../assets/icon-line-light-smile.svg"),
-        MascotStyle::Filled => egui::include_image!("../../assets/icon.svg"),
+        MascotStyle::Filled => egui::include_image!("../../assets/icon-smile.svg"),
         MascotStyle::Auto => unreachable!("resolved_mascot never returns Auto"),
     }
 }

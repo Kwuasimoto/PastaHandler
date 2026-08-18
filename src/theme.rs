@@ -43,8 +43,8 @@ pub struct Theme {
 }
 
 /// The mascot artwork variant. `Auto` picks ink by background luminance; the
-/// rest override it. `Filled` is the color-traced bowl — it has no smile
-/// variant, so the hover Easter egg rests while it's selected.
+/// rest override it. `Filled` is the color-traced bowl with the solid white
+/// face. Every variant has a hover smile.
 #[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MascotStyle {
