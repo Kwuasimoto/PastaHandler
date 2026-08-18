@@ -60,7 +60,7 @@ pub fn show(
         if theme.borderless {
             // stands in for the OS title bar text that decorations provide
             ui.add_space(4.0);
-            ui.label(egui::RichText::new("PastaHandler Settings").weak());
+            ui.label(egui::RichText::new(crate::win32::SETTINGS_WINDOW_TITLE).weak());
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if theme.borderless {

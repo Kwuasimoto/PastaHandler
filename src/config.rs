@@ -84,7 +84,7 @@ fn default_active() -> bool {
 }
 
 const HEADER: &str = "\
-# PastaHandler config
+# Pasta Handler config
 # Hotkey format: \"ctrl+alt+Digit1\" — modifiers: ctrl, alt, shift, super (case-insensitive)
 # Full list of key names (Digit1, KeyQ, F5, ...):
 # https://docs.rs/global-hotkey/latest/global_hotkey/hotkey/enum.Code.html
@@ -182,7 +182,7 @@ mod tests {
         let config = file.read().expect("missing file seeds a sample");
         assert!(!config.snippets.is_empty());
         let text = std::fs::read_to_string(file.path()).expect("file was created");
-        assert!(text.starts_with("# PastaHandler config"), "header comment present");
+        assert!(text.starts_with("# Pasta Handler config"), "header comment present");
         let _ = std::fs::remove_file(file.path());
     }
 }

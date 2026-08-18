@@ -3,6 +3,11 @@
 //! named mutex for single-instancing. No process handles are opened, nothing
 //! is injected or simulated; the compliance grep stays empty.
 
+/// The settings window's title — the single source of truth. The window is
+/// FOUND by this exact string, so the eframe app name, the header label, and
+/// the matcher below all read it from here; they can never drift apart.
+pub const SETTINGS_WINDOW_TITLE: &str = "Pasta Handler Settings";
+
 const WM_CLOSE: u32 = 0x0010;
 const SW_RESTORE: i32 = 9;
 const ERROR_ALREADY_EXISTS: i32 = 183;
@@ -31,8 +36,7 @@ unsafe extern "system" {
 unsafe extern "system" fn collect_settings_windows(hwnd: isize, lparam: isize) -> i32 {
     let mut buf = [0u16; 64];
     let len = unsafe { GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32) };
-    // must match launch_gui's eframe::run_native app name exactly
-    if String::from_utf16_lossy(&buf[..len.max(0) as usize]) == "PastaHandler Settings" {
+    if String::from_utf16_lossy(&buf[..len.max(0) as usize]) == SETTINGS_WINDOW_TITLE {
         unsafe { (*(lparam as *mut Vec<isize>)).push(hwnd) };
     }
     1 // keep enumerating — several windows may exist

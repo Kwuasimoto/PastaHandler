@@ -188,7 +188,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
         ..Default::default()
     };
     eframe::run_native(
-        "PastaHandler Settings",
+        crate::win32::SETTINGS_WINDOW_TITLE,
         options,
         Box::new(move |cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx); // enables SVG assets

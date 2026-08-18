@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/icon.svg" width="96" alt="PastaHandler — a happy little bowl of noodles">
+  <img src="assets/icon.svg" width="96" alt="Pasta Handler — a happy little bowl of noodles">
 </p>
 
-<h1 align="center">PastaHandler</h1>
+<h1 align="center">Pasta Handler</h1>
 
 <p align="center">
   Press a hotkey, get your text on the clipboard, <kbd>Ctrl</kbd>+<kbd>V</kbd> anywhere.<br>
@@ -23,12 +23,12 @@ After install you'll find two entries in the Start menu:
 
 | Entry | What it does |
 |---|---|
-| **PastaHandler** | The tray app — lives next to your clock, listens for your hotkeys |
-| **PastaHandler Settings** | The manager window — add snippets, record hotkeys, toggle them on/off |
+| **Pasta Handler** | The tray app — lives next to your clock, listens for your hotkeys |
+| **Pasta Handler Settings** | The manager window — add snippets, record hotkeys, toggle them on/off |
 
 ## Using it
 
-1. Open **PastaHandler Settings** (or click the tray bowl → Open Settings).
+1. Open **Pasta Handler Settings** (or click the tray bowl → Open Settings).
 2. **Add snippet** → type your text → click the hotkey button → **press your combo** (e.g. <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>).
 3. The row lights up — the snippet is live. Edits save automatically.
 4. Anywhere in Windows: press your combo, then <kbd>Ctrl</kbd>+<kbd>V</kbd>.
@@ -46,7 +46,7 @@ app's own title bar. Theme edits apply live and save automatically, like everyth
 
 ## Fair-play note (League of Legends and other games)
 
-PastaHandler never touches any game: no input simulation, no hooks, no process access — it only
+Pasta Handler never touches any game: no input simulation, no hooks, no process access — it only
 writes your clipboard when *you* press your hotkey, and *you* press Ctrl+V yourself. The design
 rationale against Riot's third-party-software policy is documented in [COMPLIANCE.md](COMPLIANCE.md).
 One behavioral note applies to *you*, not the tool: pasting the same link into chat every game can
