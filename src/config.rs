@@ -65,7 +65,7 @@ impl Default for Theme {
             border: [58, 58, 58],
             knob: [235, 235, 235],
             corner_radius: 4,
-            borderless: false,
+            borderless: true, // the app's own chrome is the intended look
             background_image: String::new(),
             window_opacity: 255,
             focus_outline: true,

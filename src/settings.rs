@@ -221,6 +221,16 @@ impl eframe::App for SettingsApp {
 
 fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
     let draft = config_file.read()?;
+    // the RUNNING window's title-bar/taskbar/alt-tab icon — the exe's embedded
+    // .ico only covers Explorer and shortcuts; winit needs its own copy. The
+    // image crate picks the .ico's best (largest) frame, pinned by test.
+    let window_icon = {
+        let img = image::load_from_memory(include_bytes!("../assets/icon.ico"))
+            .expect("embedded icon decodes")
+            .to_rgba8();
+        let (width, height) = img.dimensions();
+        egui::IconData { rgba: img.into_raw(), width, height }
+    };
     let options = eframe::NativeOptions {
         // glow, not the default wgpu: wgpu presents with alpha-mode IGNORE on
         // Windows, so the canvas per-pixel alpha never reaches the DWM accent
@@ -231,6 +241,7 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
             .with_min_inner_size([560.0, 300.0])
             .with_max_inner_size([1000.0, 800.0])
             .with_decorations(!draft.theme.borderless)
+            .with_icon(window_icon)
             .with_transparent(true), // the canvas's per-pixel alpha needs an alpha surface
         ..Default::default()
     };
@@ -286,6 +297,15 @@ mod tests {
             #[cfg(debug_assertions)]
             style_editor: false,
         }
+    }
+
+    /// The window icon uses the .ico's best frame — pin that the image crate
+    /// actually picks the 256px one (a 16px pick would blur alt-tab).
+    #[test]
+    fn window_icon_decodes_at_full_size() {
+        let img = image::load_from_memory(include_bytes!("../assets/icon.ico"))
+            .expect("embedded icon decodes");
+        assert_eq!((img.width(), img.height()), (256, 256));
     }
 
     #[test]
