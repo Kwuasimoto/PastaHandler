@@ -4,6 +4,7 @@ pub mod clipboard;
 pub mod config;
 pub mod error;
 pub mod hotkeys;
+pub mod logging;
 pub mod resident;
 pub mod settings;
 pub mod tray;
@@ -24,7 +25,7 @@ fn dispatch() -> Result<(), AppError> {
 
 fn main() {
     if let Err(e) = dispatch() {
-        eprintln!("{e}");
+        logging::warn(&format!("fatal: {e}"));
         std::process::exit(1);
     }
 }

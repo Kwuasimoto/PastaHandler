@@ -1,3 +1,7 @@
+//! The config file: domain structs (Config/Snippet/Theme), TOML persistence
+//! with atomic writes, and first-run seeding. This file on disk is also the
+//! IPC channel between the resident and settings processes.
+
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -88,7 +92,6 @@ const HEADER: &str = "\
 
 impl Config {
     pub fn init() -> Config {
-        println!("Initializing configuration file");
         Config {
             open_settings_on_launch: true,
             theme: Theme::default(),
@@ -103,9 +106,7 @@ impl Config {
     pub fn build_path() -> Result<PathBuf, AppError> {
         let appdata = std::env::var("APPDATA")
             .map_err(|_| AppError::Config("APPDATA env var not set".into()))?;
-        let path = PathBuf::from(appdata).join("pastahandler").join("config.toml");
-        println!("Path: {}", path.display());
-        Ok(path)
+        Ok(PathBuf::from(appdata).join("pastahandler").join("config.toml"))
     }
 }
 impl ConfigFile {
@@ -127,6 +128,7 @@ impl ConfigFile {
         match std::fs::read_to_string(&self.path) {
             Ok(text) => Ok(toml::from_str(&text)?),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                crate::logging::log_event("config missing — seeding the sample config");
                 let new_config = Config::init();
                 self.write(&new_config)?;
                 Ok(new_config)

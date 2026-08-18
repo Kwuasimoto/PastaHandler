@@ -1,3 +1,6 @@
+//! The settings process: composition shell for the egui UI regions (see the
+//! COMPOSE ORDER comment in `ui()`), the domain state, and the save path.
+
 use eframe::egui;
 
 use crate::{
@@ -189,4 +192,83 @@ fn launch_gui(config_file: ConfigFile) -> Result<(), AppError> {
         }),
     )
     .map_err(|e| AppError::Config(format!("settings window failed: {e}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Snippet, Theme};
+
+    fn snippet(text: &str, hotkey: &str, active: bool) -> Snippet {
+        Snippet { text: text.into(), hotkey: hotkey.into(), active }
+    }
+
+    fn app_with(file_name: &str, snippets: Vec<Snippet>) -> SettingsApp {
+        SettingsApp {
+            config_file: ConfigFile::new(std::env::temp_dir().join(file_name)),
+            draft: Config { snippets, open_settings_on_launch: false, theme: Theme::default() },
+            error: None,
+            theme_window: ThemeWindow::new(),
+            table: SnippetTable::new(),
+            #[cfg(debug_assertions)]
+            style_editor: false,
+        }
+    }
+
+    #[test]
+    fn commit_valid_draft_writes_and_clears_error() {
+        let mut app = app_with(
+            "pastahandler-test-commit-ok.toml",
+            vec![
+                snippet("one", "ctrl+alt+Digit1", true),
+                snippet("two", "ctrl+alt+Digit2", true),
+            ],
+        );
+        app.error = Some("stale error from last time".into());
+        app.commit(None);
+        assert_eq!(app.error, None);
+        let on_disk = app.config_file.read().expect("file was written");
+        assert_eq!(on_disk, app.draft);
+        let _ = std::fs::remove_file(app.config_file.path());
+    }
+
+    #[test]
+    fn commit_conflict_with_activation_rolls_back_and_still_saves() {
+        // two ACTIVE snippets sharing a combo; row 1 was just activated
+        let mut app = app_with(
+            "pastahandler-test-commit-rollback.toml",
+            vec![
+                snippet("first", "ctrl+alt+Digit1", true),
+                snippet("twin", "ctrl+alt+Digit1", true),
+            ],
+        );
+        app.commit(Some(1));
+        // the activation was rolled back...
+        assert!(!app.draft.snippets[1].active, "conflicting activation must roll back");
+        // ...the rest still saved...
+        let on_disk = app.config_file.read().expect("rollback still writes");
+        assert_eq!(on_disk, app.draft);
+        // ...and the user is told what happened
+        let err = app.error.expect("explains the rollback");
+        assert!(err.contains("saved inactive"), "message explains outcome: {err}");
+        let _ = std::fs::remove_file(app.config_file.path());
+    }
+
+    #[test]
+    fn commit_conflict_without_activation_leaves_file_untouched() {
+        let mut app = app_with(
+            "pastahandler-test-commit-blocked.toml",
+            vec![snippet("good", "ctrl+alt+Digit1", true)],
+        );
+        app.commit(None); // establish a known-good file
+        assert_eq!(app.error, None);
+
+        // corrupt the draft with a duplicate that no activation explains
+        app.draft.snippets.push(snippet("twin", "ctrl+alt+Digit1", true));
+        app.commit(None);
+        assert!(app.error.is_some(), "conflict must surface");
+        let on_disk = app.config_file.read().expect("read back");
+        assert_eq!(on_disk.snippets.len(), 1, "last good state stands on disk");
+        let _ = std::fs::remove_file(app.config_file.path());
+    }
 }

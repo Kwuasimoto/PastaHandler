@@ -1,3 +1,7 @@
+//! The resident process: the tray-dwelling half of the app. Registers global
+//! hotkeys, writes snippets to the clipboard, reloads the config live when the
+//! settings process (or a hand edit) changes it. Deliberately GPU-free.
+
 use std::time::{Duration, Instant};
 
 use arboard::Clipboard;
@@ -23,10 +27,10 @@ pub fn spawn_settings() {
     match std::env::current_exe() {
         Ok(exe) => {
             if let Err(e) = std::process::Command::new(exe).arg("--settings").spawn() {
-                eprintln!("failed to launch settings: {e}");
+                crate::logging::warn(&format!("failed to launch settings: {e}"));
             }
         }
-        Err(e) => eprintln!("current_exe failed: {e}"),
+        Err(e) => crate::logging::warn(&format!("current_exe failed: {e}")),
     }
 }
 
@@ -70,20 +74,24 @@ pub fn run(config_file: ConfigFile) -> Result<(), AppError> {
                         map = new_map;
                         config = new;
                     }
-                    Err(e) => eprintln!("hotkey re-register failed: {e}"),
+                    Err(e) => crate::logging::warn(&format!("hotkey re-register failed: {e}")),
                 },
-                Err(e) => eprintln!("config reload failed: {e}"),
+                Err(e) => crate::logging::warn(&format!("config reload failed: {e}")),
             }
         }
 
         match event {
             Event::UserEvent(AppEvent::Hotkey(key_event)) => {
+                // `get` twice over: the map lookup filters unknown ids, and the
+                // snippet lookup refuses to panic even if map and config were
+                // ever to disagree (they're swapped as a pair, but an event
+                // loop should never contain an indexing panic).
                 if key_event.state == HotKeyState::Pressed
                     && let Some(&idx) = map.get(&key_event.id)
-                    && let Err(e) =
-                        clipboard_manager.set_clipboard_text(&config.snippets[idx].text)
+                    && let Some(snippet) = config.snippets.get(idx)
+                    && let Err(e) = clipboard_manager.set_text(&snippet.text)
                 {
-                    eprintln!("{e}");
+                    crate::logging::warn(&format!("clipboard write failed: {e}"));
                 }
             }
             Event::UserEvent(AppEvent::Menu(menu_event)) => {

@@ -1,18 +1,27 @@
+//! Global hotkey registration via Win32 `RegisterHotKey` (the narrow API: the
+//! OS delivers only the combos we registered — this process never observes any
+//! other keystroke). See COMPLIANCE.md for why that distinction matters.
+
 use std::collections::{HashMap, HashSet};
 
 use global_hotkey::{GlobalHotKeyManager, hotkey::HotKey};
 
 use crate::{config::Config, error::AppError};
 
+/// Owns the OS-level registrations. RAII matters here: dropping this (or the
+/// manager inside it) is what unregisters the combos — keep it alive as long
+/// as the hotkeys should work.
 pub struct Hotkeys {
-    hotkey_manager: GlobalHotKeyManager,
+    manager: GlobalHotKeyManager,
+    /// What we currently hold registered with the OS — the set to release on
+    /// the next `register_all` (drop alone is NOT documented to release combos).
     registered: Vec<HotKey>,
 }
 
 impl Hotkeys {
     pub fn new() -> Result<Self, AppError> {
         Ok(Self {
-            hotkey_manager: GlobalHotKeyManager::new()?,
+            manager: GlobalHotKeyManager::new()?,
             registered: Vec::new(),
         })
     }
@@ -28,13 +37,14 @@ impl Hotkeys {
         // pass 2: unregister the old set; individual failures are ignored so one
         // stuck key can't poison every future reload
         for hk in self.registered.drain(..) {
-            let _ = self.hotkey_manager.unregister(hk);
+            let _ = self.manager.unregister(hk);
         }
 
-        // pass 3: register the new set
+        // pass 3: register the new set; the map's key is `HotKey::id()` (a hash
+        // of the combo) — the same id the resident receives in hotkey events
         let mut map = HashMap::new();
         for (hotkey, i) in parsed {
-            self.hotkey_manager.register(hotkey)?;
+            self.manager.register(hotkey)?;
             self.registered.push(hotkey);
             map.insert(hotkey.id(), i);
         }
