@@ -66,7 +66,7 @@ Details that matter once you have a few:
 
 - The **toggle** parks a snippet without deleting it.
 - Two snippets **may share a combo if only one is active** — alternate texts you switch between.
-- Everything lives in a hand-editable TOML at `%APPDATA%\pastahandler\config.toml`; the resident picks up edits within a second, whoever made them. A small diagnostics log sits next to it — errors only, never your snippets or keystrokes.
+- Everything lives in a hand-editable TOML at `%APPDATA%\pastahandler\config.toml`; the resident picks up edits within a second, whoever made them. A small diagnostics log sits next to it — errors and a few one-line breadcrumbs, never your snippets or keystrokes.
 
 ## Fair play (League of Legends and other games)
 
