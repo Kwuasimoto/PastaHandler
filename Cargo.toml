@@ -1,6 +1,6 @@
 [package]
 name = "pastahandler"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "Windows tray utility: global hotkeys load your snippets onto the clipboard — you paste with Ctrl+V"
 repository = "https://github.com/Kwuasimoto/PastaHandler"
