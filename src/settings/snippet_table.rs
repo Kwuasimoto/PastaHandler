@@ -136,8 +136,13 @@ impl SnippetTable {
                             if self.capturing == Some(i) {
                                 // a rejected keypress must not fail silently: the
                                 // hint takes over the prompt, right under their eyes
+                                let (events, held) =
+                                    ui.input(|inp| (inp.events.clone(), inp.modifiers));
                                 let (prompt, color) = match self.capture_hint {
                                     Some(hint) => (hint, palette.danger),
+                                    None if held.ctrl || held.alt || held.shift => {
+                                        ("waiting for next key…", palette.accent)
+                                    }
                                     None => ("press keys…", palette.accent),
                                 };
                                 let resp = hotkey_chip(
@@ -145,7 +150,6 @@ impl SnippetTable {
                                     HOTKEY_W,
                                     egui::RichText::new(prompt).italics().color(color),
                                 );
-                                let events = ui.input(|inp| inp.events.clone());
                                 for ev in events {
                                     if let egui::Event::Key {
                                         key,
@@ -161,10 +165,14 @@ impl SnippetTable {
                                             self.capturing = None;
                                             break;
                                         }
-                                        // bare keys would hijack normal typing system-wide;
-                                        // require at least one modifier
-                                        if !(modifiers.ctrl || modifiers.alt || modifiers.shift) {
-                                            self.capture_hint = Some("hold Ctrl / Alt / Shift");
+                                        // a lone modifier press is a chord in progress,
+                                        // not the key of the combo
+                                        if is_modifier_key(key) {
+                                            self.capture_hint = None; // held-modifier prompt takes over
+                                            continue;
+                                        }
+                                        if !combo_qualifies(&modifiers) {
+                                            self.capture_hint = Some("hold Ctrl or Alt");
                                             continue;
                                         }
                                         let combo = combo_from(&modifiers, key);
@@ -273,6 +281,31 @@ fn hotkey_chip(ui: &mut egui::Ui, width: f32, label: egui::RichText) -> egui::Re
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// Whether a modifier set may anchor a global hotkey. Ctrl or Alt is required;
+/// Shift may only ride along — shift+printable IS typing (shift+0 is ')'), and
+/// `RegisterHotKey` swallows a registered combo system-wide, so a shift-only
+/// bind would make its character impossible to type anywhere.
+fn combo_qualifies(modifiers: &egui::Modifiers) -> bool {
+    modifiers.ctrl || modifiers.alt
+}
+
+/// Modifier keys arrive as their own physical `Event::Key` presses (egui 0.36+).
+/// During capture such a press means "chord in progress", never "this is the key".
+fn is_modifier_key(key: egui::Key) -> bool {
+    use egui::Key as K;
+    matches!(
+        key,
+        K::ShiftLeft
+            | K::ShiftRight
+            | K::ControlLeft
+            | K::ControlRight
+            | K::AltLeft
+            | K::AltRight
+            | K::SuperLeft
+            | K::SuperRight
+    )
+}
+
 /// Build a global-hotkey combo string from egui input. global-hotkey's parser
 /// accepts egui's friendly key names ("2", "A", "F5") directly — no mapping
 /// table needed; `.parse::<HotKey>()` is the validator.
@@ -326,5 +359,34 @@ mod tests {
             let combo = combo_from(&mods(true, true, false), key);
             assert!(combo.parse::<HotKey>().is_ok(), "'{combo}' failed to parse");
         }
+    }
+
+    /// The regression this pins: pressing bare Ctrl during capture flashed
+    /// "unsupported key" — egui 0.36 emits modifier keys as physical presses,
+    /// and their names ("ControlLeft") are not combo material.
+    #[test]
+    fn modifier_presses_are_chord_starts_not_combos() {
+        use egui::Key as K;
+        let modifier_keys = [
+            K::ShiftLeft, K::ShiftRight, K::ControlLeft, K::ControlRight,
+            K::AltLeft, K::AltRight, K::SuperLeft, K::SuperRight,
+        ];
+        for key in modifier_keys {
+            assert!(is_modifier_key(key), "{key:?} must be skipped by capture");
+        }
+        for key in [K::A, K::Num0, K::F5, K::Space, K::Escape] {
+            assert!(!is_modifier_key(key), "{key:?} must reach normal capture");
+        }
+    }
+
+    /// The regression this pins: shift+0 once captured as a hotkey, which made
+    /// ')' untypeable system-wide. Shift never qualifies a combo on its own.
+    #[test]
+    fn shift_alone_never_qualifies() {
+        assert!(!combo_qualifies(&mods(false, false, true)), "shift-only is typing");
+        assert!(!combo_qualifies(&mods(false, false, false)), "bare keys are typing");
+        assert!(combo_qualifies(&mods(true, false, false)));
+        assert!(combo_qualifies(&mods(false, true, false)));
+        assert!(combo_qualifies(&mods(true, false, true)), "shift may ride along");
     }
 }
