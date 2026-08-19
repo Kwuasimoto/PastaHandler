@@ -58,7 +58,7 @@ Every change applies live and saves automatically. There is no Save button anywh
 ## Hotkeys
 
 1. **+ Add snippet**, then type the text you want to paste.
-2. Click the snippet's **click to set** button and **press your combo** — e.g. <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>. It needs at least one modifier (Ctrl/Alt/Shift), and <kbd>Esc</kbd> cancels.
+2. Click the snippet's **click to set** button and **press your combo** — e.g. <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>. It needs <kbd>Ctrl</kbd> or <kbd>Alt</kbd> in it — Shift can join but can't anchor a combo alone (<kbd>Shift</kbd>+<kbd>0</kbd> is just how you type <code>)</code>) — and <kbd>Esc</kbd> cancels.
 3. The row's toggle lights up — the hotkey is live *system-wide*, instantly. No restart, no save.
 4. Anywhere in Windows: press your combo, then <kbd>Ctrl</kbd>+<kbd>V</kbd>.
 
